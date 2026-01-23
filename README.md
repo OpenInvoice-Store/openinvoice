@@ -97,7 +97,7 @@ src/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/usaikoo/openinvoice.store.git
+   git clone https://github.com/usaikoo/openinvoice.git
    cd open-invoice
    ```
 

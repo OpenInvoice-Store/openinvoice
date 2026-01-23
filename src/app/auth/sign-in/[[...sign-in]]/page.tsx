@@ -11,7 +11,7 @@ export default async function Page() {
 
   try {
     const response = await fetch(
-      'https://github.com/usaikoo/openinvoice.store.git',
+      'https://github.com/usaikoo/openinvoice.git',
       {
         next: { revalidate: 86400 }
       }

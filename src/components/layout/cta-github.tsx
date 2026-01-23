@@ -5,7 +5,7 @@ export default function CtaGithub() {
   return (
     <Button variant='ghost' asChild size='sm' className='group hidden sm:flex'>
       <a
-        href='https://github.com/usaikoo/openinvoice.store.git'
+        href='https://github.com/usaikoo/openinvoice.git'
         rel='noopener noreferrer'
         target='_blank'
         className='dark:text-foreground transition-colors duration-300 hover:text-[#24292e] dark:hover:text-yellow-400'

@@ -60,7 +60,7 @@ export default function SignInViewPage({ stars }: { stars: number }) {
           <Link
             className={cn('group inline-flex hover:text-yellow-200')}
             target='_blank'
-            href={'https://github.com/usaikoo/openinvoice.store.git'}
+            href={'https://github.com/usaikoo/openinvoice.git'}
           >
             <div className='flex items-center'>
               <GitHubLogoIcon className='size-4' />
