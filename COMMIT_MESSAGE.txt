@@ -1,0 +1,52 @@
+feat: Complete Stripe Connect payment processing integration
+
+This commit implements a full Stripe Connect payment processing system with
+code quality improvements and performance optimizations.
+
+## Stripe Integration Features
+- Stripe Connect Express accounts for multi-tenant payment processing
+- Payment intent creation API with amount validation and balance checking
+- Secure payment form component using Stripe Elements
+- Webhook handler for real-time payment status updates
+- Automatic invoice status updates on successful payment
+- Support for partial payments with validation
+- Payment confirmation email automation
+- Stripe Connect onboarding flow in settings page
+- Platform fee calculation and application
+- Payment error handling and user feedback
+
+## Code Quality Improvements
+- Updated Stripe API version to latest (2025-12-15.clover)
+- Added proper cleanup and abort controllers in payment form
+- Implemented payment amount validation to prevent overpayment
+- Optimized settings page polling (conditional polling instead of constant)
+- Improved TypeScript types and removed 'any' types where possible
+- Enhanced error handling with proper type checking
+- Fixed idempotency checks in webhook handler
+- Added proper invoice relation handling in webhooks
+
+## Performance Optimizations
+- Conditional polling in settings page (only when status is pending)
+- Added AbortController for payment intent creation to prevent memory leaks
+- Payment form now properly waits for PaymentElement to be ready
+- Optimized webhook processing with better error handling
+
+## Documentation
+- Updated README with completed Stripe integration roadmap
+- Added Payment Processing section to features overview
+- Updated environment variables documentation
+- Added Stripe Connect setup documentation link
+
+## Files Changed
+- Added Stripe payment form component
+- Added Stripe API routes (payment-intent, connect/authorize, connect/status, connect/disconnect)
+- Added Stripe webhook handler
+- Added Stripe library utilities
+- Added settings page for Stripe Connect management
+- Updated invoice views with payment functionality
+- Added database migrations for Stripe Connect fields
+- Updated README with roadmap and feature documentation
+
+This implementation follows Stripe best practices and includes proper error
+handling, validation, and security measures for production use.
+

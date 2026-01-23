@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  invoices       Invoice[]
+
+  @@map("customers")
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  price          Float
+  taxRate        Float        @default(0)
+  unit           String       @default("piece")
+  imageUrl       String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  invoiceItems   InvoiceItem[]
+
+  @@map("products")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNo      Int
+  customer       Customer      @relation(fields: [customerId], references: [id])
+  customerId     String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status         String        @default("draft") // draft, sent, paid, overdue, cancelled
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  notes          String?
+  shareToken     String?       @unique
+  emailSentCount Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  items          InvoiceItem[]
+  payments       Payment[]
+  emailLogs      EmailLog[]
+
+  @@unique([organizationId, invoiceNo])
+  @@index([organizationId, createdAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  product     Product @relation(fields: [productId], references: [id])
+  productId   String
+  description String
+  quantity    Int
+  price       Float
+  taxRate     Float   @default(0)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId String
+  amount    Float
+  date      DateTime @default(now())
+  method    String   // cash, bank_transfer, credit_card, paypal, stripe, etc.
+  notes     String?
+  createdAt DateTime @default(now())
+  
+  // Stripe payment fields
+  stripePaymentIntentId String?  @unique  // Stripe PaymentIntent ID (pi_xxx)
+  stripeChargeId        String?  @unique  // Stripe Charge ID (ch_xxx)
+  stripeCustomerId      String?           // Stripe Customer ID (cus_xxx)
+  stripeStatus          String?           // 'succeeded', 'pending', 'failed', 'canceled'
+
+  @@map("payments")
+}
+
+model User {
+  id            String   @id // Clerk user ID
+  email         String?
+  firstName     String?
+  lastName      String?
+  imageUrl      String?
+  clerkUserId   String   @unique // Clerk user ID (same as id, but explicit)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  memberships   OrganizationMember[]
+
+  @@map("users")
+}
+
+model Organization {
+  id             String          @id // Clerk organization ID
+  name           String
+  slug           String?         @unique
+  imageUrl       String?
+  clerkOrgId     String          @unique // Clerk organization ID (same as id, but explicit)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  members        OrganizationMember[]
+  customers      Customer[]
+  products       Product[]
+  invoices       Invoice[]
+  invoiceCounter InvoiceCounter?
+  
+  // Stripe Connect fields
+  stripeAccountId      String?  @unique  // Connected Stripe account ID (acct_xxx)
+  stripeAccountStatus  String?           // 'pending', 'active', 'restricted', 'disabled'
+  stripeOnboardingComplete Boolean @default(false)
+  stripeConnectEnabled    Boolean @default(false)
+  stripeAccountEmail      String?        // Email from Stripe account
+  country                 String?        // ISO country code (e.g., 'US', 'CA', 'GB') for Stripe Connect
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           String       // admin, member, etc.
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+model EmailLog {
+  id          String   @id @default(cuid())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  emailType   String   // 'invoice' or 'payment_confirmation'
+  recipient   String
+  status      String   @default("sent") // 'sent' or 'failed'
+  resendId    String?  // Resend email ID for tracking
+  errorMessage String?
+  sentAt      DateTime @default(now())
+  events      EmailEvent[]
+
+  @@map("email_logs")
+  @@index([invoiceId])
+  @@index([sentAt])
+  @@index([resendId])
+}
+
+model EmailEvent {
+  id          String   @id @default(cuid())
+  emailLog    EmailLog @relation(fields: [emailLogId], references: [id], onDelete: Cascade)
+  emailLogId  String
+  eventType   String   // 'email.sent', 'email.delivered', 'email.opened', 'email.clicked', 'email.bounced', etc.
+  metadata    String?  // JSON string for additional event data (clicked URL, bounce reason, etc.)
+  occurredAt  DateTime @default(now())
+
+  @@map("email_events")
+  @@index([emailLogId])
+  @@index([eventType])
+  @@index([occurredAt])
+}
+
+model InvoiceCounter {
+  organizationId String       @id
+  lastInvoiceNo  Int          @default(0)
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_counters")
+}
+
