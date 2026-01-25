@@ -60,9 +60,16 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   emailLogs      EmailLog[]
+  
+  // Payment reminder tracking
+  lastReminderSentAt DateTime?  // Last time a reminder was sent
+  reminderCount      Int         @default(0)  // Number of reminders sent
+  markedOverdueAt    DateTime?  // When invoice was marked as overdue
 
   @@unique([organizationId, invoiceNo])
   @@index([organizationId, createdAt])
+  @@index([status, dueDate])  // For finding overdue invoices
+  @@index([organizationId, status, dueDate])  // For reminder queries
   @@map("invoices")
 }
 
@@ -96,6 +103,7 @@ model Payment {
   stripeCustomerId      String?           // Stripe Customer ID (cus_xxx)
   stripeStatus          String?           // 'succeeded', 'pending', 'failed', 'canceled'
 
+  @@index([invoiceId, stripeStatus])
   @@map("payments")
 }
 
@@ -156,7 +164,7 @@ model EmailLog {
   id          String   @id @default(cuid())
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   invoiceId   String
-  emailType   String   // 'invoice' or 'payment_confirmation'
+  emailType   String   // 'invoice', 'payment_confirmation', or 'payment_reminder'
   recipient   String
   status      String   @default("sent") // 'sent' or 'failed'
   resendId    String?  // Resend email ID for tracking

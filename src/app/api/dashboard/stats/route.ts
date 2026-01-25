@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { ensureUserAndOrganization } from '@/lib/clerk-sync';
 
 function calculateInvoiceTotal(invoice: any): number {
   const subtotal = invoice.items.reduce(
@@ -16,7 +17,8 @@ function calculateInvoiceTotal(invoice: any): number {
 
 export async function GET() {
   try {
-    const { orgId } = await auth();
+    // Ensure user and organization exist in DB (fallback if webhook failed)
+    const orgId = await ensureUserAndOrganization();
     
     if (!orgId) {
       return NextResponse.json(

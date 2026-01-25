@@ -218,8 +218,19 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     return;
   }
 
-  // Log the failure (you might want to create a payment record with failed status)
-  console.log('Payment failed for invoice:', invoiceId, paymentIntent.id);
+  // Extract failure information for logging
+  const lastPaymentError = paymentIntent.last_payment_error;
+  const failureReason = lastPaymentError?.message || 'Payment failed';
+  const failureCode = lastPaymentError?.code || 'unknown_error';
+
+  // Log the failure - no need to store detailed analytics
+  console.log(
+    'Payment failed for invoice:',
+    invoiceId,
+    paymentIntent.id,
+    failureCode,
+    failureReason
+  );
 }
 
 async function handleAccountUpdate(account: Stripe.Account) {

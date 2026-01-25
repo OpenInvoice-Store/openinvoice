@@ -1,0 +1,37 @@
+name: Payment Reminders Cron
+
+on:
+  schedule:
+    # Run daily at 9:00 AM UTC (adjust timezone as needed)
+    # Format: minute hour day month day-of-week
+    # Examples:
+    # '0 9 * * *' - Daily at 9:00 AM UTC
+    # '0 9 * * 1-5' - Weekdays at 9:00 AM UTC
+    # '0 9,15 * * *' - Twice daily at 9 AM and 3 PM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual triggering from GitHub Actions UI
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Payment Reminders
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.APP_URL }}/api/cron/reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Reminders processed successfully"
+            exit 0
+          else
+            echo "❌ Failed to process reminders (HTTP $http_code)"
+            exit 1
+          fi
+

@@ -132,20 +132,135 @@ This will charge 2.9% of each payment as a platform fee.
 ### Test Mode
 
 1. Use Stripe test mode keys (keys starting with `sk_test_` and `pk_test_`)
-2. Use Stripe test cards:
-   - Success: `4242 4242 4242 4242`
-   - Decline: `4000 0000 0000 0002`
-   - 3D Secure: `4000 0027 6000 3184`
+2. Use Stripe test cards (see sections below for details)
+
+### Testing Successful Payments
+
+Use the following test card for successful payments:
+
+- **Success**: `4242 4242 4242 4242`
+  - Expiry: Any future date (e.g., `12/25`)
+  - CVC: Any 3 digits (e.g., `123`)
+  - ZIP: Any 5 digits (e.g., `12345`)
+
+### Testing Failed Payments
+
+Open Invoice tracks failed payments and displays analytics in the dashboard. Use these test cards to simulate different failure scenarios:
+
+#### Common Failure Test Cards
+
+- **Card Declined**: `4000 0000 0000 0002`
+- **Insufficient Funds**: `4000 0000 0000 9995`
+- **Lost Card**: `4000 0000 0000 9987`
+- **Stolen Card**: `4000 0000 0000 9979`
+- **Processing Error**: `4000 0000 0000 0119`
+- **Incorrect CVC**: `4000 0000 0000 0127`
+- **Expired Card**: `4000 0000 0000 0069`
+- **Incorrect Number**: `4000 0000 0000 0001`
+
+For all failure test cards, use:
+- Expiry: Any future date (e.g., `12/25`)
+- CVC: Any 3 digits (e.g., `123`)
+- ZIP: Any 5 digits (e.g., `12345`)
+
+#### Testing Failed Payment Flow
+
+1. **Create an Invoice**
+   - Create an invoice with a customer that has an email address
+   - Navigate to the invoice payment page (dashboard or public share link)
+
+2. **Attempt Payment with Failure Card**
+   - Click "Pay Now" to open the payment form
+   - Enter a failure test card (e.g., `4000 0000 0000 0002` for declined)
+   - Fill in expiry, CVC, and ZIP
+   - Submit the payment
+
+3. **Verify Failure is Recorded**
+   - The payment should fail and show an error message
+   - Check the dashboard: **Dashboard → Overview → Payment Analytics**
+   - You should see:
+     - Failed payment count increased
+     - Failed Payment Analysis chart updated with failure reason
+     - Payment Success Rate decreased
+
+4. **Check Payment Analytics**
+   - The Payment Analytics section shows:
+     - **Payment Success Rate**: Overall success percentage with trend
+     - **Payment Method Performance**: Success rates by payment method
+     - **Failed Payment Analysis**: Breakdown of failures by reason (pie chart)
+     - **Revenue Forecast**: Historical revenue and 30-day forecast
+
+#### Verifying Failed Payments in Database
+
+You can verify failed payments are properly recorded:
+
+```sql
+SELECT 
+  stripeStatus,
+  failureReason,
+  failureCode,
+  paymentMethodType,
+  amount,
+  attemptedAt
+FROM payments
+WHERE stripeStatus = 'failed'
+ORDER BY createdAt DESC;
+```
+
+#### Testing via API
+
+Check payment analytics via API:
+
+```bash
+# Get payment analytics for last 90 days
+curl http://localhost:3000/api/payments/analytics?days=90
+```
+
+Response includes:
+- `successRate`: Overall payment success rate
+- `failedCount`: Number of failed payments
+- `failureReasons`: Breakdown of failure reasons
+- `paymentMethodStats`: Performance by payment method
+
+### Testing 3D Secure
+
+Use this test card to test 3D Secure authentication:
+
+- **3D Secure**: `4000 0027 6000 3184`
+  - Will prompt for authentication during payment
+  - Use test authentication code: `1234`
 
 ### Testing Webhooks Locally
 
-Use Stripe CLI to forward webhooks:
+Use Stripe CLI to forward webhooks to your local server:
 
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
-```
+1. **Install Stripe CLI** (if not already installed):
+   ```bash
+   brew install stripe/stripe-cli/stripe
+   ```
 
-This will give you a webhook signing secret for local testing.
+2. **Login to Stripe CLI**:
+   ```bash
+   stripe login
+   ```
+
+3. **Forward webhooks**:
+   ```bash
+   stripe listen --forward-to localhost:3000/api/webhooks/stripe
+   ```
+
+4. **Update webhook secret**:
+   - The command will output a webhook signing secret (starts with `whsec_`)
+   - Update your `.env.local`:
+     ```env
+     STRIPE_WEBHOOK_SECRET=whsec_...
+     ```
+
+5. **Test webhook events**:
+   - Make a payment (successful or failed)
+   - The webhook will be forwarded to your local server
+   - Check server logs for webhook processing
+   - Verify payment status is updated in the database
 
 ## Security Considerations
 
