@@ -27,6 +27,10 @@ export interface Invoice {
   emailSentCount?: number;
   createdAt: string;
   updatedAt: string;
+  // Payment reminder tracking
+  lastReminderSentAt?: string | null;
+  reminderCount?: number;
+  markedOverdueAt?: string | null;
   customer?: {
     id: string;
     name: string;

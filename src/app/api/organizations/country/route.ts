@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
+import { ensureUserAndOrganization } from '@/lib/clerk-sync';
 
 export async function GET(request: NextRequest) {
   try {
-    const { orgId } = await auth();
+    // Ensure user and organization exist in DB (fallback if webhook failed)
+    const orgId = await ensureUserAndOrganization();
 
     if (!orgId) {
       return NextResponse.json(
@@ -40,7 +42,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { orgId } = await auth();
+    // Ensure user and organization exist in DB (fallback if webhook failed)
+    const orgId = await ensureUserAndOrganization();
 
     if (!orgId) {
       return NextResponse.json(

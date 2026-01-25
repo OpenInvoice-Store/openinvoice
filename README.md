@@ -150,6 +150,7 @@ For detailed setup instructions, see:
 
 - **Clerk Setup** (Authentication, Organizations, Billing & Webhooks) - [docs/clerk_setup.md](./docs/clerk_setup.md)
 - **Stripe Connect Setup** - [docs/stripe_connect_setup.md](./docs/stripe_connect_setup.md)
+- **Payment Reminders Cron Job** - [docs/cron_setup.md](./docs/cron_setup.md)
 - **RBAC Configuration** - [docs/nav-rbac.md](./docs/nav-rbac.md)
 
 ## Features Overview
@@ -163,6 +164,7 @@ For detailed setup instructions, see:
 - Add custom notes to invoices
 - Generate PDF documents
 - Share invoices via secure, shareable links
+- Modern invoice details page with left-side section navigation (Details, Payments, Emails, Notes)
 
 ### Customer Management
 
@@ -209,7 +211,7 @@ For detailed setup instructions, see:
 - Email history with detailed event logs
 - Resend webhook integration for event tracking
 - Email status badges and notifications
-- Right sidebar drawer navigation for email history
+- Left-side section navigation for email history (integrated with invoice details page)
 - Track email opens, clicks, bounces, and delivery events
 
 ### Payment Processing
@@ -217,13 +219,17 @@ For detailed setup instructions, see:
 - **Stripe Connect Integration** - Multi-tenant payment processing with Express accounts
 - **Online Payments** - Accept credit card payments directly on invoices
 - **Payment Forms** - Secure, PCI-compliant payment forms using Stripe Elements
+- **Multiple Payment Methods** - Support for cards, ACH, bank transfers via Stripe's automatic payment methods
+- **Saved Payment Methods** - Stripe Customer integration with saved cards for faster checkout
 - **Partial Payments** - Support for partial invoice payments with balance tracking
 - **Automatic Status Updates** - Invoice status automatically updates on successful payment
 - **Payment Validation** - Amount validation prevents overpayment
 - **Webhook Processing** - Real-time payment status updates via Stripe webhooks
 - **Payment History** - Complete payment tracking with Stripe payment intent IDs
+- **Payment Receipts** - Generate PDF receipts for each payment with download action
 - **Email Confirmations** - Automatic payment confirmation emails to customers
 - **Stripe Onboarding** - Streamlined Stripe Connect account setup in settings
+- **Stripe Account Management** - Soft disconnect, reconnect, and reset options for better UX
 - **Platform Fees** - Configurable platform fee calculation and application
 
 ## Roadmap
@@ -244,7 +250,7 @@ For detailed setup instructions, see:
   - [x] Stripe Connect onboarding flow in settings ✅
   - [x] Platform fee calculation and application ✅
   - [x] Payment error handling and user feedback ✅
-  - [ ] Payment method storage (optional: Stripe Customer portal)
+  - [x] Payment method storage (Stripe Customer + saved cards via setup_future_usage) ✅
   - [x] Payment receipt generation ✅
 
 ### Phase 1.5: Email Functionality (Q1 2026) ✅ Completed
@@ -266,8 +272,8 @@ For detailed setup instructions, see:
 ### Phase 2: Enhanced Payment Features (Q2 2026)
 
 - [ ] **Payment Methods Expansion**
-  - [ ] Support for multiple payment methods (cards, ACH, bank transfers)
-  - [ ] Saved payment methods for recurring customers
+  - [x] Support for multiple payment methods (cards, ACH, bank transfers via automatic_payment_methods) ✅
+  - [x] Saved payment methods for recurring customers (via Stripe Customer + setup_future_usage) ✅
   - [ ] Payment plans and installments
   - [ ] Automatic payment retry for failed transactions
   - [ ] Payment method preferences by customer
@@ -284,11 +290,6 @@ For detailed setup instructions, see:
   - [ ] Payment confirmation emails for crypto transactions
   - [ ] Crypto wallet address generation and management
   - [ ] Transaction verification and blockchain confirmation tracking
-- [ ] **Payment Analytics**
-  - [ ] Payment success rate tracking
-  - [ ] Failed payment analysis and insights
-  - [ ] Payment method performance metrics
-  - [ ] Revenue forecasting based on payment patterns
 
 ### Phase 3: Multi-Provider Support (Q3 2026) - Optional
 
@@ -308,9 +309,18 @@ For detailed setup instructions, see:
   - [ ] Automated invoice generation
   - [ ] Subscription management
   - [ ] Usage-based billing
-- [ ] **Automation & Notifications**
-  - [ ] Payment reminders and automated follow-ups
-  - [ ] Overdue invoice notifications
+- [x] **Automation & Notifications** ✅
+  - [x] Payment reminders and automated follow-ups ✅
+    - [x] Automated cron job for payment reminders (GitHub Actions) ✅
+    - [x] Reminder emails for upcoming invoices (3 days before due) ✅
+    - [x] Reminder emails for due today invoices ✅
+    - [x] Overdue invoice notifications (7, 14, 30+ days) ✅
+    - [x] Manual "Send Reminder" button in invoice view ✅
+    - [x] Reminders sidebar section with reminder history ✅
+    - [x] Reminder tracking (count, last sent date) ✅
+    - [x] Flexible testing mode with query parameters ✅
+    - [x] Debug mode for troubleshooting ✅
+  - [x] Overdue invoice notifications ✅
   - [x] Custom email templates ✅
   - [ ] SMS notifications (optional)
 - [ ] **International & Compliance**
