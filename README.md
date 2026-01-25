@@ -222,6 +222,7 @@ For detailed setup instructions, see:
 - **Multiple Payment Methods** - Support for cards, ACH, bank transfers via Stripe's automatic payment methods
 - **Saved Payment Methods** - Stripe Customer integration with saved cards for faster checkout
 - **Partial Payments** - Support for partial invoice payments with balance tracking
+- **Payment Plans & Installments** - Split invoices into multiple installments (weekly, biweekly, monthly, quarterly) with automatic payment allocation and status tracking
 - **Automatic Status Updates** - Invoice status automatically updates on successful payment
 - **Payment Validation** - Amount validation prevents overpayment
 - **Webhook Processing** - Real-time payment status updates via Stripe webhooks
@@ -271,10 +272,18 @@ For detailed setup instructions, see:
 
 ### Phase 2: Enhanced Payment Features (Q2 2026)
 
-- [ ] **Payment Methods Expansion**
+- [x] **Payment Methods Expansion** ✅
   - [x] Support for multiple payment methods (cards, ACH, bank transfers via automatic_payment_methods) ✅
   - [x] Saved payment methods for recurring customers (via Stripe Customer + setup_future_usage) ✅
-  - [ ] Payment plans and installments
+  - [x] Payment plans and installments ✅
+    - [x] Payment plan creation with configurable frequency (weekly, biweekly, monthly, quarterly) ✅
+    - [x] Automatic installment generation with proper rounding handling ✅
+    - [x] Installment status tracking (pending, paid, overdue, cancelled) ✅
+    - [x] Automatic payment allocation to installments in order ✅
+    - [x] Payment plan UI components and management interface ✅
+    - [x] Installment-specific payment amounts on shared invoices ✅
+    - [x] Payment plan display with installment list and status badges ✅
+    - [x] Support for 2-60 installments per payment plan ✅
   - [x] Automatic payment retry for failed transactions ✅
     - [x] Automatic retry cron job with exponential backoff (1h, 6h, 24h) ✅
     - [x] Retry tracking (count, last retry, next retry, status) ✅
@@ -341,6 +350,13 @@ For detailed setup instructions, see:
   - [ ] Tax calculation integration (Avalara, TaxJar)
   - [ ] Payment dispute management
   - [ ] Compliance reporting (GDPR, PCI-DSS)
+- [ ] **Branding & Templates**
+  - [ ] Custom branding (logo, colors, fonts)
+  - [ ] Invoice template customization
+  - [ ] Multiple invoice templates
+  - [ ] Branded email templates
+  - [ ] Custom invoice layouts
+  - [ ] Company branding settings
 - [ ] **Advanced Analytics**
   - [ ] Custom report builder
   - [ ] Export capabilities (CSV, Excel, PDF)
@@ -364,7 +380,9 @@ The application uses PostgreSQL with Prisma ORM. Key models include:
 - **Product** - Product/service catalog with pricing
 - **Invoice** - Invoice headers with status and dates
 - **InvoiceItem** - Line items for each invoice
-- **Payment** - Payment records linked to invoices
+- **Payment** - Payment records linked to invoices and installments
+- **PaymentPlan** - Payment plan configuration (frequency, installment count)
+- **Installment** - Individual payment installments with due dates and amounts
 - **EmailLog** - Email tracking and audit trail
 - **EmailEvent** - Individual email events (opens, clicks, bounces, etc.)
 

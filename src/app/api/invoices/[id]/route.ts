@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -23,18 +23,25 @@ export async function GET(
         customer: true,
         items: {
           include: {
-            product: true,
-          },
+            product: true
+          }
         },
         payments: true,
-      },
+        paymentPlan: {
+          include: {
+            installments: {
+              include: {
+                payments: true
+              },
+              orderBy: { installmentNumber: 'asc' }
+            }
+          }
+        }
+      }
     });
 
     if (!invoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
     return NextResponse.json(invoice);
@@ -53,7 +60,7 @@ export async function PUT(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -62,10 +69,10 @@ export async function PUT(
     }
 
     const { id } = await params;
-    
+
     // Verify invoice belongs to the organization
     const existingInvoice = await prisma.invoice.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!existingInvoice) {
@@ -81,12 +88,14 @@ export async function PUT(
     // Verify customer belongs to the organization if customerId is being updated
     if (customerId && customerId !== existingInvoice.customerId) {
       const customer = await prisma.customer.findFirst({
-        where: { id: customerId, organizationId: orgId },
+        where: { id: customerId, organizationId: orgId }
       });
 
       if (!customer) {
         return NextResponse.json(
-          { error: 'Customer not found or does not belong to your organization' },
+          {
+            error: 'Customer not found or does not belong to your organization'
+          },
           { status: 404 }
         );
       }
@@ -94,7 +103,7 @@ export async function PUT(
 
     // First, delete existing items
     await prisma.invoiceItem.deleteMany({
-      where: { invoiceId: id },
+      where: { invoiceId: id }
     });
 
     // Update invoice and recreate items
@@ -112,19 +121,19 @@ export async function PUT(
             description: item.description,
             quantity: parseInt(item.quantity),
             price: parseFloat(item.price),
-            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0,
-          })),
-        },
+            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0
+          }))
+        }
       },
       include: {
         customer: true,
         items: {
           include: {
-            product: true,
-          },
+            product: true
+          }
         },
-        payments: true,
-      },
+        payments: true
+      }
     });
 
     return NextResponse.json(invoice);
@@ -143,7 +152,7 @@ export async function DELETE(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -152,10 +161,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    
+
     // Verify invoice belongs to the organization
     const invoice = await prisma.invoice.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!invoice) {
@@ -166,7 +175,7 @@ export async function DELETE(
     }
 
     await prisma.invoice.delete({
-      where: { id },
+      where: { id }
     });
 
     return NextResponse.json({ success: true });
@@ -178,4 +187,3 @@ export async function DELETE(
     );
   }
 }
-

@@ -4,7 +4,7 @@ import { InvoicePublicView } from '@/features/invoicing/components/invoice-publi
 
 export const metadata = {
   title: 'Invoice',
-  description: 'View invoice details',
+  description: 'View invoice details'
 };
 
 export default async function PublicInvoicePage({
@@ -20,11 +20,21 @@ export default async function PublicInvoicePage({
       customer: true,
       items: {
         include: {
-          product: true,
-        },
+          product: true
+        }
       },
       payments: true,
-    },
+      paymentPlan: {
+        include: {
+          installments: {
+            include: {
+              payments: true
+            },
+            orderBy: { installmentNumber: 'asc' }
+          }
+        }
+      }
+    } as any
   });
 
   if (!invoice) {
@@ -33,4 +43,3 @@ export default async function PublicInvoicePage({
 
   return <InvoicePublicView invoice={invoice} />;
 }
-

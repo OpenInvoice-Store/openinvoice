@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { IconDownload, IconCurrencyDollar } from '@tabler/icons-react';
+import {
+  IconDownload,
+  IconCurrencyDollar,
+  IconCalendar
+} from '@tabler/icons-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StripePaymentForm } from './stripe-payment-form';
 import {
@@ -46,6 +50,48 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
     0
   );
   const balance = total - totalPaid;
+
+  // Calculate payment plan information
+  const paymentPlanInfo = useMemo(() => {
+    if (!invoice.paymentPlan || invoice.paymentPlan.status !== 'active') {
+      return null;
+    }
+
+    const now = new Date();
+    const installments = invoice.paymentPlan.installments || [];
+
+    // Find the current installment that's due (pending or overdue)
+    const currentInstallment = installments.find((inst: any) => {
+      const totalPaid = (inst.payments || []).reduce(
+        (sum: number, p: any) => sum + p.amount,
+        0
+      );
+      const isFullyPaid = totalPaid >= inst.amount;
+      return (
+        !isFullyPaid && (inst.status === 'pending' || inst.status === 'overdue')
+      );
+    });
+
+    if (!currentInstallment) {
+      return null;
+    }
+
+    const installmentPaid = (currentInstallment.payments || []).reduce(
+      (sum: number, p: any) => sum + p.amount,
+      0
+    );
+    const installmentRemaining = currentInstallment.amount - installmentPaid;
+
+    return {
+      installment: currentInstallment,
+      amountDue: installmentRemaining,
+      installmentNumber: currentInstallment.installmentNumber,
+      dueDate: currentInstallment.dueDate,
+      isOverdue:
+        currentInstallment.status === 'overdue' ||
+        new Date(currentInstallment.dueDate) < now
+    };
+  }, [invoice.paymentPlan]);
 
   // Check Stripe Connect status for the organization
   const { data: stripeStatus } = useQuery({
@@ -91,7 +137,9 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                   className='bg-green-600 hover:bg-green-700'
                 >
                   <IconCurrencyDollar className='mr-2 h-4 w-4' />
-                  Pay Now
+                  {paymentPlanInfo
+                    ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrency(paymentPlanInfo.amountDue)})`
+                    : `Pay Now (${formatCurrency(balance)})`}
                 </Button>
               )}
             <Button variant='outline' onClick={handleDownloadPDF}>
@@ -196,9 +244,85 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                   </div>
                 </>
               )}
+              {paymentPlanInfo && (
+                <div className='mt-2 border-t pt-2'>
+                  <div className='text-muted-foreground mb-1 text-xs'>
+                    Payment Plan - Installment #
+                    {paymentPlanInfo.installmentNumber}
+                  </div>
+                  <div className='flex justify-between font-semibold'>
+                    <span>Amount Due:</span>
+                    <span
+                      className={
+                        paymentPlanInfo.isOverdue ? 'text-red-600' : ''
+                      }
+                    >
+                      {formatCurrency(paymentPlanInfo.amountDue)}
+                    </span>
+                  </div>
+                  <div className='text-muted-foreground mt-1 text-xs'>
+                    Due: {formatDate(paymentPlanInfo.dueDate)}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        {invoice.paymentPlan && invoice.paymentPlan.status === 'active' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Plan</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className='space-y-4'>
+                <div className='grid grid-cols-2 gap-4 text-sm'>
+                  <div>
+                    <span className='text-muted-foreground'>Frequency:</span>
+                    <p className='font-medium'>
+                      {invoice.paymentPlan.frequency === 'weekly'
+                        ? 'Weekly'
+                        : invoice.paymentPlan.frequency === 'biweekly'
+                          ? 'Bi-weekly'
+                          : invoice.paymentPlan.frequency === 'monthly'
+                            ? 'Monthly'
+                            : 'Quarterly'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='text-muted-foreground'>Installments:</span>
+                    <p className='font-medium'>
+                      {invoice.paymentPlan.installmentCount}
+                    </p>
+                  </div>
+                </div>
+                {paymentPlanInfo && (
+                  <div className='border-t pt-4'>
+                    <div className='bg-muted/40 flex items-center justify-between rounded-lg p-3'>
+                      <div>
+                        <div className='font-semibold'>
+                          Installment #{paymentPlanInfo.installmentNumber}
+                        </div>
+                        <div className='text-muted-foreground mt-1 flex items-center gap-1 text-sm'>
+                          <IconCalendar className='h-3 w-3' />
+                          Due: {formatDate(paymentPlanInfo.dueDate)}
+                        </div>
+                      </div>
+                      <div className='text-right'>
+                        <div className='text-lg font-semibold'>
+                          {formatCurrency(paymentPlanInfo.amountDue)}
+                        </div>
+                        {paymentPlanInfo.isOverdue && (
+                          <Badge className='mt-1 bg-red-500'>Overdue</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {invoice.notes && (
           <Card>
@@ -223,12 +347,24 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                 <DialogHeader>
                   <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
                   <DialogDescription>
-                    Pay the remaining balance of {formatCurrency(balance)}
+                    {paymentPlanInfo ? (
+                      <>
+                        Pay Installment #{paymentPlanInfo.installmentNumber} of{' '}
+                        {formatCurrency(paymentPlanInfo.amountDue)}
+                        {paymentPlanInfo.isOverdue && (
+                          <span className='ml-2 text-red-600'>(Overdue)</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        Pay the remaining balance of {formatCurrency(balance)}
+                      </>
+                    )}
                   </DialogDescription>
                 </DialogHeader>
                 <StripePaymentForm
                   invoiceId={invoice.id}
-                  amount={balance}
+                  amount={paymentPlanInfo?.amountDue || balance}
                   onSuccess={() => {
                     setShowStripePayment(false);
                     // Reload page to show updated balance

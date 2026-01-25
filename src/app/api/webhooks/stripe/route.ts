@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmationEmail } from '@/lib/email';
+import {
+  applyPaymentToInstallments,
+  updateInvoiceStatusFromPaymentPlan
+} from '@/lib/payment-plan';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -192,7 +196,8 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       customer: true,
       organization: true,
       items: true,
-      payments: true
+      payments: true,
+      paymentPlan: true
     }
   });
 
@@ -201,27 +206,13 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     return;
   }
 
-  // Calculate totals
-  const totalAmount = invoiceWithRelations.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (1 + item.taxRate / 100),
-    0
-  );
-  const totalPaid =
-    invoiceWithRelations.payments.reduce((sum, p) => sum + p.amount, 0) +
-    amount;
-
-  // Update invoice status
-  let newStatus = invoice.status;
-  if (totalPaid >= totalAmount) {
-    newStatus = 'paid';
-  } else if (invoice.status === 'draft') {
-    newStatus = 'sent';
+  // If invoice has a payment plan, apply payment to installments
+  if (invoiceWithRelations.paymentPlan) {
+    await applyPaymentToInstallments(invoiceId, payment.id, amount);
   }
 
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: { status: newStatus }
-  });
+  // Update invoice status (handles both regular and payment plan invoices)
+  await updateInvoiceStatusFromPaymentPlan(invoiceId);
 
   // Send payment confirmation email
   if (invoiceWithRelations.customer.email) {

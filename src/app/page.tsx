@@ -9,7 +9,15 @@ import {
   BarChart3,
   Users,
   Mail,
-  Github
+  Github,
+  CreditCard,
+  Package,
+  Kanban,
+  Bell,
+  Building2,
+  Receipt,
+  TrendingUp,
+  CheckCircle2
 } from 'lucide-react';
 
 export default async function Page() {
@@ -71,9 +79,9 @@ export default async function Page() {
               <span className='text-primary mt-2 block'>Made Simple</span>
             </h1>
             <p className='text-muted-foreground mx-auto mb-8 max-w-2xl text-lg sm:text-xl'>
-              Create, manage, and track invoices effortlessly. Open source
-              invoice management built for businesses of all sizes with a
-              beautiful, intuitive interface.
+              Create, manage, and track invoices effortlessly. Accept online
+              payments, automate reminders, and gain insights with analytics.
+              Open source invoice management built for businesses of all sizes.
             </p>
             <div className='flex flex-col justify-center gap-4 sm:flex-row'>
               <Button asChild size='lg' className='text-base'>
@@ -100,9 +108,12 @@ export default async function Page() {
         {/* Features Section */}
         <section className='container mx-auto px-4 py-16 sm:px-6 sm:py-24 lg:px-8'>
           <div className='mx-auto max-w-6xl'>
-            <h2 className='mb-12 text-center text-3xl font-bold'>
+            <h2 className='mb-4 text-center text-3xl font-bold'>
               Everything you need to manage invoices
             </h2>
+            <p className='text-muted-foreground mb-12 text-center text-lg'>
+              Powerful features to streamline your invoicing workflow
+            </p>
             <div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3'>
               <div className='bg-card rounded-lg border p-6'>
                 <FileText className='text-primary mb-4 h-8 w-8' />
@@ -110,9 +121,17 @@ export default async function Page() {
                   Invoice Management
                 </h3>
                 <p className='text-muted-foreground'>
-                  Create, edit, and manage invoices with a beautiful,
-                  user-friendly interface. Track status and generate
-                  professional PDFs.
+                  Create, edit, and manage invoices with automatic numbering,
+                  status tracking, and professional PDF generation.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <CreditCard className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Online Payments</h3>
+                <p className='text-muted-foreground'>
+                  Accept payments via Stripe Connect with support for cards,
+                  ACH, bank transfers, partial payments, and saved payment
+                  methods.
                 </p>
               </div>
               <div className='bg-card rounded-lg border p-6'>
@@ -122,7 +141,15 @@ export default async function Page() {
                 </h3>
                 <p className='text-muted-foreground'>
                   Keep track of all your customers with detailed contact
-                  information and complete invoice history.
+                  information, invoice history, and payment method preferences.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Package className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Product Catalog</h3>
+                <p className='text-muted-foreground'>
+                  Maintain a catalog of products and services with pricing, tax
+                  rates, and images for quick invoice creation.
                 </p>
               </div>
               <div className='bg-card rounded-lg border p-6'>
@@ -131,18 +158,42 @@ export default async function Page() {
                   Analytics Dashboard
                 </h3>
                 <p className='text-muted-foreground'>
-                  Visual insights into your invoicing with charts, statistics,
-                  and revenue tracking.
+                  Visual insights with revenue charts, invoice status
+                  distribution, and sales performance analytics.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Kanban className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Kanban Board</h3>
+                <p className='text-muted-foreground'>
+                  Visual invoice workflow management with drag-and-drop between
+                  status columns for better organization.
                 </p>
               </div>
               <div className='bg-card rounded-lg border p-6'>
                 <Mail className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Email Tracking</h3>
+                <p className='text-muted-foreground'>
+                  Send invoices via email with real-time tracking of opens,
+                  clicks, delivery status, and complete engagement metrics.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Bell className='text-primary mb-4 h-8 w-8' />
                 <h3 className='mb-2 text-xl font-semibold'>
-                  Email Integration
+                  Payment Reminders
                 </h3>
                 <p className='text-muted-foreground'>
-                  Send invoices directly to customers via email with tracking
-                  and engagement metrics.
+                  Automated payment reminders for upcoming, due, and overdue
+                  invoices with configurable schedules and retry logic.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Receipt className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Payment Receipts</h3>
+                <p className='text-muted-foreground'>
+                  Generate professional PDF receipts for each payment with
+                  complete payment history and tracking.
                 </p>
               </div>
               <div className='bg-card rounded-lg border p-6'>
@@ -152,7 +203,17 @@ export default async function Page() {
                 </h3>
                 <p className='text-muted-foreground'>
                   Generate secure, shareable links for your clients to view and
-                  pay invoices online.
+                  pay invoices online with automatic status updates.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Building2 className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  Multi-Tenant Workspaces
+                </h3>
+                <p className='text-muted-foreground'>
+                  Organize invoices by workspace with team collaboration,
+                  role-based access control, and organization-level billing.
                 </p>
               </div>
               <div className='bg-card rounded-lg border p-6'>
@@ -161,9 +222,74 @@ export default async function Page() {
                   Secure & Reliable
                 </h3>
                 <p className='text-muted-foreground'>
-                  Enterprise-grade authentication and security with multi-tenant
-                  workspace support.
+                  Enterprise-grade authentication with Clerk, PCI-compliant
+                  payments, and comprehensive security measures.
                 </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Coming Soon Section */}
+        <section className='bg-muted/50 border-y'>
+          <div className='container mx-auto px-4 py-16 sm:px-6 sm:py-24 lg:px-8'>
+            <div className='mx-auto max-w-4xl'>
+              <h2 className='mb-4 text-center text-3xl font-bold'>
+                Coming Soon
+              </h2>
+              <p className='text-muted-foreground mb-8 text-center text-lg'>
+                Exciting features on our roadmap
+              </p>
+              <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+                <div className='bg-background rounded-lg border p-4'>
+                  <div className='flex items-start gap-3'>
+                    <TrendingUp className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <div>
+                      <h3 className='mb-1 font-semibold'>Recurring Invoices</h3>
+                      <p className='text-muted-foreground text-sm'>
+                        Automated recurring invoices and subscription management
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className='bg-background rounded-lg border p-4'>
+                  <div className='flex items-start gap-3'>
+                    <CheckCircle2 className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <div>
+                      <h3 className='mb-1 font-semibold'>
+                        Branding & Templates
+                      </h3>
+                      <p className='text-muted-foreground text-sm'>
+                        Custom branding, invoice templates, and branded email
+                        templates
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className='bg-background rounded-lg border p-4'>
+                  <div className='flex items-start gap-3'>
+                    <TrendingUp className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <div>
+                      <h3 className='mb-1 font-semibold'>Multi-Currency</h3>
+                      <p className='text-muted-foreground text-sm'>
+                        Support for multiple currencies and international
+                        payments
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className='bg-background rounded-lg border p-4'>
+                  <div className='flex items-start gap-3'>
+                    <BarChart3 className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <div>
+                      <h3 className='mb-1 font-semibold'>Advanced Analytics</h3>
+                      <p className='text-muted-foreground text-sm'>
+                        Custom report builder, financial forecasting, and export
+                        capabilities
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

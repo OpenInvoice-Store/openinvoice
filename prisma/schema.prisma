@@ -64,6 +64,7 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   emailLogs      EmailLog[]
+  paymentPlan    PaymentPlan?
   
   // Payment reminder tracking
   lastReminderSentAt DateTime?  // Last time a reminder was sent
@@ -114,8 +115,13 @@ model Payment {
   retryStatus           String?                 // 'pending', 'scheduled', 'exhausted', null
   maxRetries            Int       @default(3)  // Maximum retry attempts (default: 3)
 
+  // Installment payment tracking
+  installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  installmentId String?
+
   @@index([invoiceId, stripeStatus])
   @@index([stripeStatus, nextRetryAt])  // For finding payments ready to retry
+  @@index([installmentId])
   @@map("payments")
 }
 
@@ -211,5 +217,41 @@ model InvoiceCounter {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("invoice_counters")
+}
+
+model PaymentPlan {
+  id              String       @id @default(cuid())
+  invoice         Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId       String       @unique
+  totalAmount     Float        // Total amount to be paid in installments
+  installmentCount Int         // Number of installments
+  frequency       String       // 'weekly', 'biweekly', 'monthly', 'quarterly', 'custom'
+  startDate       DateTime     // When first installment is due
+  status          String       @default("active") // 'active', 'completed', 'cancelled'
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  installments    Installment[]
+
+  @@map("payment_plans")
+  @@index([status])
+}
+
+model Installment {
+  id                String       @id @default(cuid())
+  paymentPlan       PaymentPlan  @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+  paymentPlanId     String
+  installmentNumber Int          // 1, 2, 3, etc.
+  amount            Float        // Amount due for this installment
+  dueDate           DateTime     // When this installment is due
+  status            String       @default("pending") // 'pending', 'paid', 'overdue', 'cancelled'
+  paidAt            DateTime?    // When this installment was fully paid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  payments          Payment[]    // Payments applied to this installment
+
+  @@unique([paymentPlanId, installmentNumber])
+  @@index([paymentPlanId, installmentNumber])
+  @@index([status, dueDate]) // For finding overdue installments
+  @@map("installments")
 }
 

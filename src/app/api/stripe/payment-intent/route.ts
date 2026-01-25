@@ -238,8 +238,10 @@ export async function POST(request: NextRequest) {
       // Use Stripe's automatic payment methods so the Payment Element can offer
       // multiple options (cards, wallets, bank debits) that are enabled on the
       // connected account.
+      // Always enable automatic_payment_methods - Stripe will still use preferred
+      // payment method if one is specified via the payment_method parameter
       automatic_payment_methods: {
-        enabled: !preferredPaymentMethodId // Disable if using preferred method
+        enabled: true
       },
       // Ask Stripe to save the payment method for future off-session use.
       // This enables "saved cards" in the Payment Element for this customer.

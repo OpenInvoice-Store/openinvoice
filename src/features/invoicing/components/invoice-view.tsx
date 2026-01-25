@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentsList } from './payments-list';
 import { PaymentForm } from './payment-form';
 import { StripePaymentForm } from './stripe-payment-form';
+import { PaymentPlanSection } from './payment-plan-section';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -443,6 +444,12 @@ export function InvoiceView() {
                   </div>
                 </CardContent>
               </Card>
+
+              <PaymentPlanSection
+                invoiceId={id}
+                invoiceTotal={total}
+                totalPaid={totalPaid}
+              />
             </>
           )}
 
@@ -705,11 +712,12 @@ export function InvoiceView() {
                       <div className='text-muted-foreground py-8 text-center text-sm'>
                         <IconBell className='mx-auto mb-2 h-8 w-8 opacity-50' />
                         <p>No payment reminders have been sent yet.</p>
-                        {invoice.status !== 'paid' && invoice.customer?.email && (
-                          <p className='mt-2'>
-                            Click "Send Reminder" to send the first reminder.
-                          </p>
-                        )}
+                        {invoice.status !== 'paid' &&
+                          invoice.customer?.email && (
+                            <p className='mt-2'>
+                              Click "Send Reminder" to send the first reminder.
+                            </p>
+                          )}
                       </div>
                     );
                   }
@@ -743,7 +751,9 @@ export function InvoiceView() {
                             <div className='flex items-center justify-between'>
                               <div className='flex items-center gap-2'>
                                 <IconBell className='h-4 w-4 text-orange-600' />
-                                <span className='font-medium'>{reminderType}</span>
+                                <span className='font-medium'>
+                                  {reminderType}
+                                </span>
                                 <Badge
                                   variant={
                                     log.status === 'sent'
