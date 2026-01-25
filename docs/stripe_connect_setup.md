@@ -245,9 +245,9 @@ Use Stripe CLI to forward webhooks to your local server:
    ```
 
 3. **Forward webhooks**:
-   ```bash
-   stripe listen --forward-to localhost:3000/api/webhooks/stripe
-   ```
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
 
 4. **Update webhook secret**:
    - The command will output a webhook signing secret (starts with `whsec_`)

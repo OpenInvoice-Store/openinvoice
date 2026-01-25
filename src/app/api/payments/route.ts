@@ -16,10 +16,16 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const invoiceId = searchParams.get('invoiceId');
+    const customerId = searchParams.get('customerId');
 
     const payments = await prisma.payment.findMany({
       where: {
         ...(invoiceId && { invoiceId }),
+        ...(customerId && {
+          invoice: {
+            customerId
+          }
+        }),
         invoice: {
           organizationId: orgId
         }

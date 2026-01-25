@@ -275,8 +275,21 @@ For detailed setup instructions, see:
   - [x] Support for multiple payment methods (cards, ACH, bank transfers via automatic_payment_methods) ✅
   - [x] Saved payment methods for recurring customers (via Stripe Customer + setup_future_usage) ✅
   - [ ] Payment plans and installments
-  - [ ] Automatic payment retry for failed transactions
-  - [ ] Payment method preferences by customer
+  - [x] Automatic payment retry for failed transactions ✅
+    - [x] Automatic retry cron job with exponential backoff (1h, 6h, 24h) ✅
+    - [x] Retry tracking (count, last retry, next retry, status) ✅
+    - [x] Retry using saved payment methods ✅
+    - [x] Retry status display in payment UI ✅
+    - [x] Configurable max retries (default: 3) ✅
+    - [x] GitHub Actions workflow integration ✅
+  - [x] Payment method preferences by customer ✅
+    - [x] Store Stripe customer ID on Customer model ✅
+    - [x] Store preferred payment method ID ✅
+    - [x] API endpoint to get/set payment method preferences ✅
+    - [x] Payment intent uses preferred payment method automatically ✅
+    - [x] UI to manage payment method preferences in customer edit page ✅
+    - [x] Display saved payment methods with card details ✅
+    - [x] Set/remove default payment method ✅
 - [ ] **Crypto Payment Integration**
   - [ ] Research and select crypto payment provider (Coinbase Commerce, BitPay, etc.)
   - [ ] Set up crypto payment API integration

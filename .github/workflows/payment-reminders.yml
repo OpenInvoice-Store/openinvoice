@@ -1,4 +1,4 @@
-name: Payment Reminders Cron
+name: Payment Automation Cron
 
 on:
   schedule:
@@ -12,7 +12,7 @@ on:
   workflow_dispatch: # Allow manual triggering from GitHub Actions UI
 
 jobs:
-  send-reminders:
+  payment-automation:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Payment Reminders
@@ -29,9 +29,27 @@ jobs:
           
           if [ "$http_code" -eq 200 ]; then
             echo "✅ Reminders processed successfully"
-            exit 0
           else
             echo "❌ Failed to process reminders (HTTP $http_code)"
+          fi
+      
+      - name: Trigger Payment Retries
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.APP_URL }}/api/cron/payment-retries" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Payment retries processed successfully"
+            exit 0
+          else
+            echo "❌ Failed to process payment retries (HTTP $http_code)"
             exit 1
           fi
 

@@ -4,7 +4,9 @@ import { NextRequest } from 'next/server';
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
 const isPublicRoute = createRouteMatcher([
   '/api/webhooks/clerk(.*)', // Exclude webhook routes from authentication
-  '/invoice(.*)', // Allow public access to invoice share links
+  '/api/webhooks/stripe(.*)', // Exclude Stripe webhook routes from authentication
+  '/api/stripe/payment-intent(.*)', // Allow public access to payment intent (for guest payments via share links)
+  '/invoice(.*)' // Allow public access to invoice share links
 ]);
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
@@ -12,7 +14,7 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   if (isPublicRoute(req)) {
     return;
   }
-  
+
   if (isProtectedRoute(req)) await auth.protect();
 });
 
@@ -24,4 +26,3 @@ export const config = {
     '/(api|trpc)(.*)'
   ]
 };
-

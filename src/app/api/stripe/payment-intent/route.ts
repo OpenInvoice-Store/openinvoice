@@ -5,7 +5,26 @@ import { prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const { orgId } = await auth();
+    // Get auth, but don't require it (allow guest access via share links)
+    // For guest users accessing via share links, orgId will be null/undefined
+    let orgId: string | null = null;
+    try {
+      const authResult = await auth();
+      // Only set orgId if it's a valid non-empty string
+      if (
+        authResult?.orgId &&
+        typeof authResult.orgId === 'string' &&
+        authResult.orgId.length > 0
+      ) {
+        orgId = authResult.orgId;
+      } else {
+        orgId = null;
+      }
+    } catch (error) {
+      // User is not authenticated (guest access) - this is allowed for share links
+      orgId = null;
+    }
+
     const body = await request.json();
     const {
       invoiceId,
@@ -47,11 +66,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // If user is authenticated, verify invoice belongs to their organization
-    if (orgId && invoice.organizationId !== orgId) {
+    // Priority: If invoice has shareToken, allow access regardless of auth status
+    // This enables guest payments via share links
+    const hasShareToken = !!invoice.shareToken;
+    const isAuthenticated =
+      orgId && typeof orgId === 'string' && orgId.length > 0;
+
+    if (hasShareToken) {
+      // Invoice has shareToken - allow access (guest or authenticated)
+    } else if (isAuthenticated) {
+      // Authenticated user accessing invoice without shareToken - must belong to their org
+      if (invoice.organizationId !== orgId) {
+        return NextResponse.json(
+          {
+            error: 'Invoice not found or does not belong to your organization'
+          },
+          { status: 404 }
+        );
+      }
+    } else {
+      // Guest user trying to access invoice without shareToken
       return NextResponse.json(
-        { error: 'Invoice not found or does not belong to your organization' },
-        { status: 404 }
+        {
+          error:
+            'This invoice is not publicly accessible. Please use the share link provided in the invoice email.'
+        },
+        { status: 403 }
       );
     }
 
@@ -117,12 +157,65 @@ export async function POST(request: NextRequest) {
     // For Stripe Connect, customers can be created on the platform account.
     // We always attach a customer so that Stripe can store and reuse payment
     // methods (saved cards) for this email across future payments.
-    let customerId = invoice.customer.email
-      ? await getOrCreateStripeCustomerOnPlatform(
+    let customerId: string | null = null;
+
+    // First, check if customer already has a stripeCustomerId in database
+    const customer = await prisma.customer.findUnique({
+      where: { id: invoice.customerId }
+    });
+    const existingStripeCustomerId = (customer as any)?.stripeCustomerId;
+
+    if (existingStripeCustomerId) {
+      // Verify the Stripe customer still exists
+      try {
+        await stripe.customers.retrieve(existingStripeCustomerId);
+        customerId = existingStripeCustomerId;
+      } catch (error) {
+        // Customer doesn't exist in Stripe, will create/find below
+      }
+    }
+
+    // If no valid customer ID yet, create or find one
+    if (!customerId) {
+      if (invoice.customer.email) {
+        customerId = await getOrCreateStripeCustomerOnPlatform(
           invoice.customer.email,
-          invoice.customer.name
-        )
-      : null;
+          invoice.customer.name,
+          invoice.customerId
+        );
+      } else {
+        // Customer has no email - create a customer without email
+        // This is less ideal but ensures we always have a customer for payment method storage
+        try {
+          const newStripeCustomer = await stripe.customers.create({
+            name: invoice.customer.name || undefined,
+            metadata: {
+              localCustomerId: invoice.customerId,
+              organizationId: invoice.organizationId
+            }
+          });
+          customerId = newStripeCustomer.id;
+
+          // Store in database
+          await prisma.customer.update({
+            where: { id: invoice.customerId },
+            data: { stripeCustomerId: customerId } as any
+          });
+        } catch (error) {
+          console.error(
+            '[Payment Intent] Failed to create Stripe customer:',
+            error
+          );
+          // Continue without customer - payment will still work but payment method won't be saved
+        }
+      }
+    }
+
+    // Note: If customerId is null, payment will still work but payment method won't be saved
+
+    // Get preferred payment method if available (customer was already fetched above)
+    const preferredPaymentMethodId =
+      (customer as any)?.preferredPaymentMethodId || null;
 
     // For Stripe Connect Express accounts, create payment intent on PLATFORM account
     // and use on_behalf_of + transfer_data to route funds to connected account
@@ -131,6 +224,10 @@ export async function POST(request: NextRequest) {
       amount: amountInCents,
       currency: 'usd', // You might want to make this configurable
       customer: customerId || undefined,
+      // Use preferred payment method if available
+      ...(preferredPaymentMethodId && customerId
+        ? { payment_method: preferredPaymentMethodId }
+        : {}),
       metadata: {
         invoiceId,
         invoiceNo: invoice.invoiceNo.toString(),
@@ -142,7 +239,7 @@ export async function POST(request: NextRequest) {
       // multiple options (cards, wallets, bank debits) that are enabled on the
       // connected account.
       automatic_payment_methods: {
-        enabled: true
+        enabled: !preferredPaymentMethodId // Disable if using preferred method
       },
       // Ask Stripe to save the payment method for future off-session use.
       // This enables "saved cards" in the Payment Element for this customer.
@@ -197,26 +294,52 @@ export async function POST(request: NextRequest) {
 // For Stripe Connect, we create customers on the platform account
 async function getOrCreateStripeCustomerOnPlatform(
   email: string,
-  name: string
+  name: string,
+  customerDbId: string
 ): Promise<string | null> {
   try {
+    // Check if customer already has Stripe customer ID stored
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerDbId }
+    });
+
+    const customerStripeId = (customer as any)?.stripeCustomerId;
+    if (customerStripeId) {
+      // Verify the Stripe customer still exists
+      try {
+        await stripe.customers.retrieve(customerStripeId);
+        return customerStripeId;
+      } catch (error) {
+        // Customer doesn't exist in Stripe, continue to create/find
+      }
+    }
+
     // Search for existing customer on platform account
     const customers = await stripe.customers.list({
       email,
       limit: 1
     });
 
+    let stripeCustomerId: string;
+
     if (customers.data.length > 0) {
-      return customers.data[0].id;
+      stripeCustomerId = customers.data[0].id;
+    } else {
+      // Create new customer on platform account
+      const customer = await stripe.customers.create({
+        email,
+        name
+      });
+      stripeCustomerId = customer.id;
     }
 
-    // Create new customer on platform account
-    const customer = await stripe.customers.create({
-      email,
-      name
+    // Store Stripe customer ID in database
+    await prisma.customer.update({
+      where: { id: customerDbId },
+      data: { stripeCustomerId } as any
     });
 
-    return customer.id;
+    return stripeCustomerId;
   } catch (error) {
     console.error('Error creating/retrieving Stripe customer:', error);
     return null;

@@ -22,6 +22,10 @@ model Customer {
   updatedAt      DateTime     @updatedAt
   invoices       Invoice[]
 
+  // Payment method preferences
+  stripeCustomerId        String?  // Stripe Customer ID (cus_xxx) for payment method storage
+  preferredPaymentMethodId String? // Preferred Stripe PaymentMethod ID (pm_xxx)
+
   @@map("customers")
 }
 
@@ -103,7 +107,15 @@ model Payment {
   stripeCustomerId      String?           // Stripe Customer ID (cus_xxx)
   stripeStatus          String?           // 'succeeded', 'pending', 'failed', 'canceled'
 
+  // Payment retry fields
+  retryCount            Int       @default(0)  // Number of retry attempts
+  lastRetryAt           DateTime?              // Last retry attempt timestamp
+  nextRetryAt          DateTime?                    // Next scheduled retry timestamp
+  retryStatus           String?                 // 'pending', 'scheduled', 'exhausted', null
+  maxRetries            Int       @default(3)  // Maximum retry attempts (default: 3)
+
   @@index([invoiceId, stripeStatus])
+  @@index([stripeStatus, nextRetryAt])  // For finding payments ready to retry
   @@map("payments")
 }
 

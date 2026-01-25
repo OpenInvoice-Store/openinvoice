@@ -117,6 +117,60 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   // Create payment record
   const amount = paymentIntent.amount / 100; // Convert from cents
 
+  // Ensure customer's stripeCustomerId is stored in database
+  const stripeCustomerId = paymentIntent.customer as string | null;
+  if (stripeCustomerId && invoice.customer) {
+    // Update customer record with Stripe customer ID if not already set
+    const customer = invoice.customer as any;
+    if (!customer.stripeCustomerId) {
+      await prisma.customer.update({
+        where: { id: invoice.customerId },
+        data: { stripeCustomerId } as any
+      });
+    }
+  }
+
+  // If payment method was saved (setup_future_usage was set), ensure it's attached to customer
+  // With Stripe Connect, payment methods are saved automatically when setup_future_usage is set
+  // but we should verify the customer has the stripeCustomerId stored
+  if (stripeCustomerId && paymentIntent.payment_method) {
+    try {
+      // Verify payment method exists and is attached to customer
+      const paymentMethod = await stripe.paymentMethods.retrieve(
+        paymentIntent.payment_method as string
+      );
+
+      // If payment method is not attached to customer, attach it
+      if (
+        !paymentMethod.customer ||
+        paymentMethod.customer !== stripeCustomerId
+      ) {
+        try {
+          await stripe.paymentMethods.attach(
+            paymentIntent.payment_method as string,
+            {
+              customer: stripeCustomerId
+            }
+          );
+        } catch (attachError: any) {
+          // If already attached, that's fine - otherwise log error
+          if (attachError.code !== 'payment_method_already_attached') {
+            console.error(
+              '[Webhook] Error attaching payment method:',
+              attachError
+            );
+          }
+        }
+      }
+    } catch (error: any) {
+      // Payment method might not exist yet or other error - log for debugging
+      console.error(
+        '[Webhook] Payment method attachment error:',
+        error?.message || error
+      );
+    }
+  }
+
   const payment = await prisma.payment.create({
     data: {
       invoiceId,
@@ -125,7 +179,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       method: 'stripe',
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId: charge?.id || null,
-      stripeCustomerId: paymentIntent.customer as string | null,
+      stripeCustomerId: stripeCustomerId,
       stripeStatus: 'succeeded',
       notes: `Payment processed via Stripe. Payment Intent: ${paymentIntent.id}`
     }
@@ -212,7 +266,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
 }
 
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
-  const { invoiceId } = paymentIntent.metadata;
+  const { invoiceId, organizationId } = paymentIntent.metadata;
 
   if (!invoiceId) {
     return;
@@ -223,13 +277,79 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
   const failureReason = lastPaymentError?.message || 'Payment failed';
   const failureCode = lastPaymentError?.code || 'unknown_error';
 
-  // Log the failure - no need to store detailed analytics
+  // Check if payment record exists
+  let payment = await prisma.payment.findFirst({
+    where: { stripePaymentIntentId: paymentIntent.id }
+  });
+
+  // Calculate next retry time (exponential backoff: 1h, 6h, 24h)
+  const retryIntervals = [1, 6, 24]; // hours
+  const retryCount = payment?.retryCount || 0;
+  const nextRetryHours =
+    retryIntervals[Math.min(retryCount, retryIntervals.length - 1)];
+  const nextRetryAt = new Date();
+  nextRetryAt.setHours(nextRetryAt.getHours() + nextRetryHours);
+
+  if (payment) {
+    // Update existing payment record
+    const maxRetries = payment.maxRetries || 3;
+    const shouldRetry = retryCount < maxRetries;
+
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        stripeStatus: 'failed',
+        retryCount: retryCount + 1,
+        lastRetryAt: new Date(),
+        nextRetryAt: shouldRetry ? nextRetryAt : null,
+        retryStatus: shouldRetry ? 'scheduled' : 'exhausted',
+        notes: payment.notes
+          ? `${payment.notes}\nFailed: ${failureReason} (${failureCode})`
+          : `Payment failed: ${failureReason} (${failureCode})`
+      } as any
+    });
+  } else {
+    // Create new payment record for failed payment (for tracking)
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true }
+    });
+
+    if (!invoice) {
+      console.error('Invoice not found for failed payment:', invoiceId);
+      return;
+    }
+
+    const amount = paymentIntent.amount / 100; // Convert from cents
+    const maxRetries = 3;
+    const shouldRetry = retryCount < maxRetries;
+
+    payment = await prisma.payment.create({
+      data: {
+        invoiceId,
+        amount,
+        date: new Date(),
+        method: 'stripe',
+        stripePaymentIntentId: paymentIntent.id,
+        stripeCustomerId: paymentIntent.customer as string | null,
+        stripeStatus: 'failed',
+        retryCount: 0,
+        lastRetryAt: new Date(),
+        nextRetryAt: shouldRetry ? nextRetryAt : null,
+        retryStatus: shouldRetry ? 'scheduled' : null,
+        maxRetries,
+        notes: `Payment failed: ${failureReason} (${failureCode})`
+      } as any
+    });
+  }
+
   console.log(
     'Payment failed for invoice:',
     invoiceId,
     paymentIntent.id,
     failureCode,
-    failureReason
+    failureReason,
+    `Retry ${retryCount + 1}/${payment.maxRetries || 3}`
   );
 }
 
