@@ -46,28 +46,41 @@ const recurringInvoiceItemSchema = z.object({
   taxRate: z.number().min(0).max(100)
 });
 
-const recurringInvoiceSchema = z.object({
-  name: z.string().min(1, 'Template name is required'),
-  customerId: z.string().min(1, 'Customer is required'),
-  frequency: z.enum([
-    'daily',
-    'weekly',
-    'biweekly',
-    'monthly',
-    'quarterly',
-    'yearly',
-    'custom'
-  ]),
-  interval: z.number().min(1),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().optional().nullable(),
-  templateItems: z
-    .array(recurringInvoiceItemSchema)
-    .min(1, 'At least one item is required'),
-  templateNotes: z.string().optional(),
-  daysUntilDue: z.number().min(1),
-  autoSendEmail: z.boolean()
-});
+const recurringInvoiceSchema = z
+  .object({
+    name: z.string().min(1, 'Template name is required'),
+    customerId: z.string().min(1, 'Customer is required'),
+    frequency: z.enum([
+      'daily',
+      'weekly',
+      'biweekly',
+      'monthly',
+      'quarterly',
+      'yearly',
+      'custom'
+    ]),
+    interval: z.number().min(1),
+    startDate: z.string().min(1, 'Start date is required'),
+    endDate: z.string().optional().nullable(),
+    templateItems: z
+      .array(recurringInvoiceItemSchema)
+      .min(1, 'At least one item is required'),
+    templateNotes: z.string().optional(),
+    daysUntilDue: z.number().min(1),
+    autoSendEmail: z.boolean(),
+    isUsageBased: z.boolean(),
+    usageUnit: z.string().optional().nullable()
+  })
+  .superRefine((data, ctx) => {
+    // If usage-based, usage unit is required
+    if (data.isUsageBased && !data.usageUnit) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Usage unit is required when usage-based billing is enabled',
+        path: ['usageUnit']
+      });
+    }
+  });
 
 type RecurringInvoiceFormData = z.infer<typeof recurringInvoiceSchema>;
 
@@ -97,7 +110,9 @@ export function RecurringInvoiceForm() {
       ],
       templateNotes: '',
       daysUntilDue: 30,
-      autoSendEmail: true
+      autoSendEmail: true,
+      isUsageBased: false,
+      usageUnit: null
     }
   });
 
@@ -121,7 +136,9 @@ export function RecurringInvoiceForm() {
         templateItems: items,
         templateNotes: template.templateNotes || '',
         daysUntilDue: template.daysUntilDue,
-        autoSendEmail: template.autoSendEmail
+        autoSendEmail: template.autoSendEmail,
+        isUsageBased: template.isUsageBased || false,
+        usageUnit: template.usageUnit || null
       });
     }
   }, [template, isEditing, form]);
@@ -372,6 +389,54 @@ export function RecurringInvoiceForm() {
             </FormItem>
           )}
         />
+      </div>
+
+      <div className='space-y-4 rounded-lg border p-4'>
+        <FormField
+          control={form.control}
+          name='isUsageBased'
+          render={({ field }) => (
+            <FormItem className='flex flex-row items-start space-y-0 space-x-3'>
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <div className='space-y-1 leading-none'>
+                <FormLabel>Usage-based billing</FormLabel>
+                <FormDescription>
+                  Enable usage-based billing. Invoice amounts will be calculated
+                  based on recorded usage data.
+                </FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {form.watch('isUsageBased') && (
+          <FormField
+            control={form.control}
+            name='usageUnit'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Usage Unit *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='e.g., GB, API calls, hours, minutes'
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Unit of measurement for usage (e.g., "GB" for storage, "API
+                  calls" for API usage)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
 
       <div>

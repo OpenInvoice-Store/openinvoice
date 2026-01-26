@@ -204,13 +204,20 @@ export const columns: ColumnDef<RecurringInvoiceTemplate>[] = [
       const template = row.original;
       return (
         <div className='flex flex-col'>
-          <Link
-            href={`/dashboard/recurring-invoices/${template.id}`}
-            className='font-medium hover:underline'
-            onClick={(e) => e.stopPropagation()}
-          >
-            {template.name}
-          </Link>
+          <div className='flex items-center gap-2'>
+            <Link
+              href={`/dashboard/recurring-invoices/${template.id}`}
+              className='font-medium hover:underline'
+              onClick={(e) => e.stopPropagation()}
+            >
+              {template.name}
+            </Link>
+            {template.isUsageBased && (
+              <Badge variant='secondary' className='text-xs'>
+                Usage
+              </Badge>
+            )}
+          </div>
           <span className='text-muted-foreground text-xs'>
             {template.customer?.name || 'Unknown Customer'}
           </span>
@@ -384,8 +391,21 @@ export const columns: ColumnDef<RecurringInvoiceTemplate>[] = [
       column: Column<RecurringInvoiceTemplate, unknown>;
     }) => <DataTableColumnHeader column={column} title='Amount' />,
     cell: ({ row }) => {
+      const template = row.original;
+      if (template.isUsageBased) {
+        return (
+          <div className='text-right'>
+            <div className='text-muted-foreground text-sm italic'>Variable</div>
+            {template.usageUnit && (
+              <div className='text-muted-foreground text-xs'>
+                per {template.usageUnit}
+              </div>
+            )}
+          </div>
+        );
+      }
       try {
-        const items = JSON.parse(row.original.templateItems);
+        const items = JSON.parse(template.templateItems);
         const subtotal = items.reduce(
           (sum: number, item: any) => sum + item.price * item.quantity,
           0

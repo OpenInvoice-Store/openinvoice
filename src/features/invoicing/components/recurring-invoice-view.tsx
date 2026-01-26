@@ -7,6 +7,8 @@ import {
   useUpdateRecurringInvoice,
   useGenerateRecurringInvoice
 } from '../hooks/use-recurring-invoices';
+import { UsageRecordForm } from './usage-record-form';
+import { UsageHistory } from './usage-history';
 import {
   Card,
   CardContent,
@@ -352,9 +354,35 @@ export function RecurringInvoiceView() {
                 Template Amount
               </div>
               <div className='text-lg font-semibold'>
-                {formatCurrency(total)}
+                {template.isUsageBased ? (
+                  <span className='text-muted-foreground italic'>
+                    Variable (usage-based)
+                  </span>
+                ) : (
+                  formatCurrency(total)
+                )}
               </div>
             </div>
+            {template.isUsageBased && (
+              <>
+                <Separator />
+                <div>
+                  <div className='text-muted-foreground text-sm font-medium'>
+                    Billing Type
+                  </div>
+                  <div className='text-lg'>
+                    <Badge variant='secondary'>Usage-Based</Badge>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <div className='text-muted-foreground text-sm font-medium'>
+                    Usage Unit
+                  </div>
+                  <div className='text-lg'>{template.usageUnit || 'units'}</div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -496,6 +524,31 @@ export function RecurringInvoiceView() {
           </div>
         </CardContent>
       </Card>
+
+      {template.isUsageBased && (
+        <>
+          <Card>
+            <CardHeader>
+              <div className='flex items-center justify-between'>
+                <div>
+                  <CardTitle>Usage Management</CardTitle>
+                  <CardDescription>
+                    Record and view usage data for this billing template
+                  </CardDescription>
+                </div>
+                <UsageRecordForm
+                  templateId={template.id}
+                  usageUnit={template.usageUnit}
+                />
+              </div>
+            </CardHeader>
+          </Card>
+          <UsageHistory
+            templateId={template.id}
+            usageUnit={template.usageUnit}
+          />
+        </>
+      )}
 
       {template.templateNotes && (
         <Card>

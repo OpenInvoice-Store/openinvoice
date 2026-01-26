@@ -87,7 +87,9 @@ export async function POST(request: NextRequest) {
       templateItems,
       templateNotes,
       daysUntilDue = 30,
-      autoSendEmail = true
+      autoSendEmail = true,
+      isUsageBased = false,
+      usageUnit
     } = body;
 
     // Validation
@@ -168,6 +170,8 @@ export async function POST(request: NextRequest) {
         daysUntilDue,
         status: 'active',
         autoSendEmail,
+        isUsageBased,
+        usageUnit,
         totalGenerated: 0
       },
       include: {

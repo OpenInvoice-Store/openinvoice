@@ -159,6 +159,9 @@ export async function PUT(
     }
     if (body.autoSendEmail !== undefined)
       updateData.autoSendEmail = body.autoSendEmail;
+    if (body.isUsageBased !== undefined)
+      updateData.isUsageBased = body.isUsageBased;
+    if (body.usageUnit !== undefined) updateData.usageUnit = body.usageUnit;
 
     const updatedTemplate = await prisma.recurringInvoiceTemplate.update({
       where: { id },

@@ -84,13 +84,79 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Parse template items
-        const items = JSON.parse(template.templateItems);
-
         // Calculate dates
         const issueDate = new Date();
         const dueDate = new Date(issueDate);
         dueDate.setDate(dueDate.getDate() + template.daysUntilDue);
+
+        // Calculate billing period for usage-based invoices
+        let billingPeriodStart: Date;
+        let billingPeriodEnd: Date = issueDate;
+
+        if (template.isUsageBased) {
+          // For usage-based, billing period is from lastGeneratedAt (or startDate) to now
+          billingPeriodStart = template.lastGeneratedAt
+            ? new Date(template.lastGeneratedAt)
+            : new Date(template.startDate);
+        }
+
+        // Parse template items
+        const baseItems = JSON.parse(template.templateItems);
+
+        // For usage-based billing, calculate quantities from usage records
+        let invoiceItems: any[] = [];
+        let usageRecordIds: string[] = [];
+
+        if (template.isUsageBased) {
+          // Find unbilled usage records for this period
+          const usageRecords = await prisma.usageRecord.findMany({
+            where: {
+              recurringTemplateId: template.id,
+              invoiceId: null, // Only unbilled records
+              periodStart: { gte: billingPeriodStart },
+              periodEnd: { lte: billingPeriodEnd }
+            },
+            orderBy: { periodStart: 'asc' }
+          });
+
+          if (usageRecords.length === 0) {
+            // Skip this template if no usage records
+            results.skipped++;
+            results.details.push({
+              templateId: template.id,
+              templateName: template.name,
+              status: 'skipped',
+              reason: 'No usage records found for billing period'
+            });
+            continue;
+          }
+
+          // Calculate total usage quantity
+          const totalUsage = usageRecords.reduce(
+            (sum, record) => sum + record.quantity,
+            0
+          );
+
+          // Create invoice items based on usage
+          invoiceItems = baseItems.map((item: any) => ({
+            productId: item.productId,
+            description: `${item.description} (${totalUsage} ${template.usageUnit || 'units'})`,
+            quantity: Math.ceil(totalUsage * item.quantity),
+            price: parseFloat(item.price),
+            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0
+          }));
+
+          usageRecordIds = usageRecords.map((r) => r.id);
+        } else {
+          // For fixed billing, use template items as-is
+          invoiceItems = baseItems.map((item: any) => ({
+            productId: item.productId,
+            description: item.description,
+            quantity: parseInt(item.quantity),
+            price: parseFloat(item.price),
+            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0
+          }));
+        }
 
         // Generate invoice
         const invoice = await prisma.$transaction(
@@ -106,7 +172,7 @@ export async function GET(request: NextRequest) {
             });
 
             // Create invoice
-            return await tx.invoice.create({
+            const newInvoice = await tx.invoice.create({
               data: {
                 invoiceNo: counter.lastInvoiceNo,
                 customerId: template.customerId,
@@ -117,13 +183,7 @@ export async function GET(request: NextRequest) {
                 notes: template.templateNotes || null,
                 recurringTemplateId: template.id,
                 items: {
-                  create: items.map((item: any) => ({
-                    productId: item.productId,
-                    description: item.description,
-                    quantity: parseInt(item.quantity),
-                    price: parseFloat(item.price),
-                    taxRate: item.taxRate ? parseFloat(item.taxRate) : 0
-                  }))
+                  create: invoiceItems
                 }
               },
               include: {
@@ -135,6 +195,20 @@ export async function GET(request: NextRequest) {
                 }
               }
             });
+
+            // Link usage records to invoice if usage-based
+            if (template.isUsageBased && usageRecordIds.length > 0) {
+              await tx.usageRecord.updateMany({
+                where: {
+                  id: { in: usageRecordIds }
+                },
+                data: {
+                  invoiceId: newInvoice.id
+                }
+              });
+            }
+
+            return newInvoice;
           },
           {
             isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,

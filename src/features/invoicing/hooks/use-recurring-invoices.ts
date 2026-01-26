@@ -24,6 +24,8 @@ export interface RecurringInvoiceTemplate {
   autoSendEmail: boolean;
   totalGenerated: number;
   lastGeneratedAt: string | null;
+  isUsageBased: boolean;
+  usageUnit: string | null;
   createdAt: string;
   updatedAt: string;
   customer?: {
@@ -46,6 +48,20 @@ export interface RecurringInvoiceTemplate {
   _count?: {
     invoices: number;
   };
+}
+
+export interface UsageRecord {
+  id: string;
+  recurringTemplateId: string;
+  invoiceId: string | null;
+  periodStart: string;
+  periodEnd: string;
+  quantity: number;
+  metadata: string | null;
+  recordedAt: string;
+  recordedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RecurringInvoiceTemplateItem {
@@ -199,6 +215,67 @@ export function useGenerateRecurringInvoice() {
       queryClient.invalidateQueries({ queryKey: ['recurring-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['recurring-invoice', id] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    }
+  });
+}
+
+export function useUsageRecords(
+  templateId: string,
+  periodStart?: string,
+  periodEnd?: string
+) {
+  const queryParams = new URLSearchParams();
+  if (periodStart) queryParams.append('periodStart', periodStart);
+  if (periodEnd) queryParams.append('periodEnd', periodEnd);
+
+  return useQuery<UsageRecord[]>({
+    queryKey: ['usage-records', templateId, periodStart, periodEnd],
+    queryFn: async () => {
+      const url = `/api/recurring-invoices/${templateId}/usage${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch usage records');
+      return res.json();
+    },
+    enabled: !!templateId
+  });
+}
+
+export function useCreateUsageRecord() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      recurringTemplateId: string;
+      periodStart: string;
+      periodEnd: string;
+      quantity: number;
+      metadata?: string;
+    }) => {
+      const res = await fetch(
+        `/api/recurring-invoices/${data.recurringTemplateId}/usage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            periodStart: data.periodStart,
+            periodEnd: data.periodEnd,
+            quantity: data.quantity,
+            metadata: data.metadata
+          })
+        }
+      );
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to create usage record');
+      }
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['usage-records', variables.recurringTemplateId]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['recurring-invoice', variables.recurringTemplateId]
+      });
     }
   });
 }
