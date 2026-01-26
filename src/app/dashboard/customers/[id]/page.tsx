@@ -1,21 +1,14 @@
-import PageContainer from '@/components/layout/page-container';
-import { CustomerView } from '@/features/invoicing/components/customer-view';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Dashboard: Customer Details'
 };
 
-export default function CustomerDetailsPage({
+export default async function CustomerDetailsPage({
   params
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return (
-    <PageContainer
-      pageTitle='Customer Details'
-      pageDescription='View customer details and payment history'
-    >
-      <CustomerView />
-    </PageContainer>
-  );
+  const { id } = await params;
+  redirect(`/dashboard/customers/${id}/details`);
 }

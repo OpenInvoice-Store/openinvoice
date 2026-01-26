@@ -25,7 +25,20 @@ export async function POST(
       where: { id, organizationId: orgId },
       include: {
         customer: true,
-        organization: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+            primaryColor: true,
+            secondaryColor: true,
+            companyAddress: true,
+            companyPhone: true,
+            companyEmail: true,
+            companyWebsite: true,
+            footerText: true
+          }
+        },
         items: {
           include: {
             product: true
@@ -77,6 +90,18 @@ export async function POST(
     const invoiceUrl = `${baseUrl}/invoice/${shareToken}`;
     const pdfUrl = `${baseUrl}/api/invoices/${id}/pdf`;
 
+    // Get branding data
+    const branding = {
+      logoUrl: invoice.organization.logoUrl,
+      primaryColor: invoice.organization.primaryColor,
+      secondaryColor: invoice.organization.secondaryColor,
+      companyAddress: invoice.organization.companyAddress,
+      companyPhone: invoice.organization.companyPhone,
+      companyEmail: invoice.organization.companyEmail,
+      companyWebsite: invoice.organization.companyWebsite,
+      footerText: invoice.organization.footerText
+    };
+
     // Send email and track it
     let emailResult;
     let emailStatus = 'sent';
@@ -93,7 +118,8 @@ export async function POST(
         issueDate: invoice.issueDate,
         dueDate: invoice.dueDate,
         total,
-        organizationName: invoice.organization?.name
+        organizationName: invoice.organization?.name,
+        branding: branding
       });
       resendId = emailResult.id || null;
     } catch (emailError) {

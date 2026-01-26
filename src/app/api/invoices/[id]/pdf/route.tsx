@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -27,18 +27,31 @@ export async function GET(
         customer: true,
         items: {
           include: {
-            product: true,
-          },
+            product: true
+          }
         },
         payments: true,
-      },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+            primaryColor: true,
+            secondaryColor: true,
+            fontFamily: true,
+            companyAddress: true,
+            companyPhone: true,
+            companyEmail: true,
+            companyWebsite: true,
+            footerText: true
+          }
+        },
+        invoiceTemplate: true
+      }
     });
 
     if (!invoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
     // Calculate totals
@@ -62,7 +75,7 @@ export async function GET(
           tax,
           total,
           totalPaid,
-          balance,
+          balance
         }}
       />
     ) as React.ReactElement<DocumentProps>;
@@ -78,8 +91,8 @@ export async function GET(
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="invoice-${invoice.invoiceNo}.pdf"`,
-      },
+        'Content-Disposition': `attachment; filename="invoice-${invoice.invoiceNo}.pdf"`
+      }
     });
   } catch (error) {
     console.error('Error generating PDF:', error);
@@ -89,4 +102,3 @@ export async function GET(
     );
   }
 }
-

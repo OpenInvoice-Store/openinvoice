@@ -76,6 +76,10 @@ model Invoice {
   recurringInvoiceTemplate   RecurringInvoiceTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
   recurringTemplateId        String?
   usageRecords                UsageRecord[]             // Usage records billed on this invoice
+  
+  // Invoice template
+  invoiceTemplate             InvoiceTemplate?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId                  String?
 
   @@unique([organizationId, invoiceNo])
   @@index([organizationId, createdAt])
@@ -168,6 +172,19 @@ model Organization {
   stripeConnectEnabled    Boolean @default(false)
   stripeAccountEmail      String?        // Email from Stripe account
   country                 String?        // ISO country code (e.g., 'US', 'CA', 'GB') for Stripe Connect
+  
+  // Branding fields
+  logoUrl                String?        // Company logo URL
+  primaryColor           String?         // Primary brand color (hex)
+  secondaryColor         String?         // Secondary brand color (hex)
+  fontFamily             String?         // Font family for invoices
+  companyAddress         String?         // Company address
+  companyPhone           String?         // Company phone number
+  companyEmail           String?         // Company email
+  companyWebsite         String?         // Company website URL
+  footerText             String?         // Footer text for invoices
+  
+  invoiceTemplates       InvoiceTemplate[] // Invoice templates
 
   @@map("organizations")
 }
@@ -330,5 +347,30 @@ model UsageRecord {
   @@index([invoiceId])
   @@index([recurringTemplateId, recordedAt])
   @@map("usage_records")
+}
+
+model InvoiceTemplate {
+  id                String       @id @default(cuid())
+  name              String       // Template name (e.g., "Modern", "Classic", "Minimal")
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  // Template configuration (stored as JSON)
+  layout            String?      // Layout type: 'standard', 'compact', 'detailed'
+  headerTemplate    String?      // Custom header HTML/template
+  footerTemplate    String?      // Custom footer HTML/template
+  styles            String?      // Custom CSS styles (JSON)
+  
+  // Template settings
+  isDefault         Boolean      @default(false) // Default template for organization
+  isActive          Boolean      @default(true)   // Whether template is active
+  
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  invoices          Invoice[]    // Invoices using this template
+
+  @@index([organizationId, isDefault])
+  @@index([organizationId, isActive])
+  @@map("invoice_templates")
 }
 

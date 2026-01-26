@@ -33,6 +33,21 @@ export default async function PublicInvoicePage({
             orderBy: { installmentNumber: 'asc' }
           }
         }
+      },
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          logoUrl: true,
+          primaryColor: true,
+          secondaryColor: true,
+          fontFamily: true,
+          companyAddress: true,
+          companyPhone: true,
+          companyEmail: true,
+          companyWebsite: true,
+          footerText: true
+        }
       }
     } as any
   });

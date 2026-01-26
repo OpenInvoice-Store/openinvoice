@@ -1,22 +1,14 @@
-import PageContainer from '@/components/layout/page-container';
-import { InvoiceView } from '@/features/invoicing/components/invoice-view';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Dashboard: Invoice Details'
 };
 
-export default function InvoiceDetailsPage({
+export default async function InvoiceDetailsPage({
   params
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return (
-    <PageContainer
-      pageTitle='Invoice Details'
-      pageDescription='View invoice details and manage payments'
-    >
-      <InvoiceView />
-    </PageContainer>
-  );
+  const { id } = await params;
+  redirect(`/dashboard/invoices/${id}/details`);
 }
-

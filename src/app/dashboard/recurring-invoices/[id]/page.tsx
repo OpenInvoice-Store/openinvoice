@@ -1,17 +1,14 @@
-import PageContainer from '@/components/layout/page-container';
-import { RecurringInvoiceView } from '@/features/invoicing/components/recurring-invoice-view';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Dashboard: Recurring Invoice Details'
 };
 
-export default function RecurringInvoiceDetailsPage() {
-  return (
-    <PageContainer
-      pageTitle='Recurring Invoice Template'
-      pageDescription='View and manage recurring invoice template details'
-    >
-      <RecurringInvoiceView />
-    </PageContainer>
-  );
+export default async function RecurringInvoiceDetailsPage({
+  params
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/dashboard/recurring-invoices/${id}/overview`);
 }

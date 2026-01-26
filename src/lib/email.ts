@@ -18,6 +18,16 @@ export interface SendInvoiceEmailParams {
   organizationName?: string;
   fromEmail?: string;
   fromName?: string;
+  branding?: {
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    secondaryColor?: string | null;
+    companyAddress?: string | null;
+    companyPhone?: string | null;
+    companyEmail?: string | null;
+    companyWebsite?: string | null;
+    footerText?: string | null;
+  };
 }
 
 export interface SendPaymentConfirmationEmailParams {
@@ -96,7 +106,8 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
         issueDate,
         dueDate,
         total,
-        organizationName
+        organizationName,
+        branding: params.branding
       })
     });
 
@@ -236,6 +247,16 @@ function generateInvoiceEmailHTML(params: {
   dueDate: Date | string;
   total: number;
   organizationName?: string;
+  branding?: {
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    secondaryColor?: string | null;
+    companyAddress?: string | null;
+    companyPhone?: string | null;
+    companyEmail?: string | null;
+    companyWebsite?: string | null;
+    footerText?: string | null;
+  };
 }): string {
   const {
     customerName,
@@ -245,8 +266,13 @@ function generateInvoiceEmailHTML(params: {
     issueDate,
     dueDate,
     total,
-    organizationName
+    organizationName,
+    branding
   } = params;
+
+  const primaryColor = branding?.primaryColor || '#2563eb';
+  const secondaryColor = branding?.secondaryColor || '#64748b';
+  const footerText = branding?.footerText || 'Thank you for your business!';
 
   const formattedIssueDate = new Date(issueDate).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -275,7 +301,22 @@ function generateInvoiceEmailHTML(params: {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <h1 style="color: #1a1a1a; margin-top: 0; font-size: 24px;">Invoice #${invoiceNo}</h1>
+    ${branding?.logoUrl ? `<div style="margin-bottom: 20px; text-align: center;"><img src="${branding.logoUrl}" alt="${organizationName || 'Company'}" style="max-height: 60px; max-width: 200px;" /></div>` : ''}
+    <h1 style="color: ${primaryColor}; margin-top: 0; font-size: 24px;">Invoice #${invoiceNo}</h1>
+    ${
+      branding?.companyAddress ||
+      branding?.companyPhone ||
+      branding?.companyEmail ||
+      branding?.companyWebsite
+        ? `
+    <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e5e7eb; font-size: 12px; color: ${secondaryColor};">
+      ${branding.companyAddress ? `<div>${branding.companyAddress}</div>` : ''}
+      ${branding.companyPhone || branding.companyEmail ? `<div>${branding.companyPhone || ''} ${branding.companyEmail ? `| ${branding.companyEmail}` : ''}</div>` : ''}
+      ${branding.companyWebsite ? `<div><a href="${branding.companyWebsite}" style="color: ${primaryColor};">${branding.companyWebsite}</a></div>` : ''}
+    </div>
+    `
+        : ''
+    }
     
     <p style="color: #666; font-size: 16px;">Hello ${customerName},</p>
     
@@ -302,11 +343,11 @@ function generateInvoiceEmailHTML(params: {
     
     <div style="margin: 30px 0; text-align: center;">
       <a href="${invoiceUrl}" 
-         style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; margin: 5px;">
+         style="display: inline-block; background-color: ${primaryColor}; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; margin: 5px;">
         View Invoice Online
       </a>
       <a href="${pdfUrl}" 
-         style="display: inline-block; background-color: #ffffff; color: #2563eb; border: 2px solid #2563eb; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; margin: 5px;">
+         style="display: inline-block; background-color: #ffffff; color: ${primaryColor}; border: 2px solid ${primaryColor}; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; margin: 5px;">
         Download PDF
       </a>
     </div>
@@ -552,11 +593,13 @@ function generatePaymentReminderEmailHTML(params: {
     </div>
     
     <p style="color: #666; font-size: 14px; margin-top: 30px;">
-      ${reminderType === 'final' 
-        ? 'Please arrange payment immediately to avoid any service interruptions or additional fees.' 
-        : reminderType === 'overdue'
-        ? 'We would appreciate prompt payment to avoid any inconvenience. If you have already made payment, please disregard this notice.'
-        : 'We appreciate your prompt attention to this matter. If you have any questions or concerns, please don\'t hesitate to contact us.'}
+      ${
+        reminderType === 'final'
+          ? 'Please arrange payment immediately to avoid any service interruptions or additional fees.'
+          : reminderType === 'overdue'
+            ? 'We would appreciate prompt payment to avoid any inconvenience. If you have already made payment, please disregard this notice.'
+            : "We appreciate your prompt attention to this matter. If you have any questions or concerns, please don't hesitate to contact us."
+      }
     </p>
     
     <p style="color: #666; font-size: 14px; margin-top: 20px;">

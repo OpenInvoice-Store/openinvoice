@@ -5,6 +5,7 @@ import {
   View,
   StyleSheet,
   Font,
+  Image
 } from '@react-pdf/renderer';
 
 // Register fonts if needed
@@ -17,97 +18,97 @@ const styles = StyleSheet.create({
   page: {
     padding: 40,
     fontSize: 12,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Helvetica'
   },
   header: {
-    marginBottom: 30,
+    marginBottom: 30
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 10
   },
   invoiceInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 20
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 20
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 10
   },
   row: {
     flexDirection: 'row',
-    marginBottom: 5,
+    marginBottom: 5
   },
   label: {
     width: 100,
-    fontWeight: 'bold',
+    fontWeight: 'bold'
   },
   table: {
-    marginTop: 10,
+    marginTop: 10
   },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: '#f0f0f0',
     padding: 8,
-    fontWeight: 'bold',
+    fontWeight: 'bold'
   },
   tableRow: {
     flexDirection: 'row',
     padding: 8,
-    borderBottom: '1pt solid #e0e0e0',
+    borderBottom: '1pt solid #e0e0e0'
   },
   colDescription: {
-    width: '40%',
+    width: '40%'
   },
   colQuantity: {
     width: '15%',
-    textAlign: 'right',
+    textAlign: 'right'
   },
   colPrice: {
     width: '15%',
-    textAlign: 'right',
+    textAlign: 'right'
   },
   colTax: {
     width: '15%',
-    textAlign: 'right',
+    textAlign: 'right'
   },
   colTotal: {
     width: '15%',
-    textAlign: 'right',
+    textAlign: 'right'
   },
   totals: {
     marginTop: 20,
-    alignItems: 'flex-end',
+    alignItems: 'flex-end'
   },
   totalRow: {
     flexDirection: 'row',
     width: 200,
     justifyContent: 'space-between',
-    marginBottom: 5,
+    marginBottom: 5
   },
   totalLabel: {
-    fontWeight: 'bold',
+    fontWeight: 'bold'
   },
   grandTotal: {
     fontSize: 16,
     fontWeight: 'bold',
     borderTop: '1pt solid #000',
     paddingTop: 5,
-    marginTop: 5,
+    marginTop: 5
   },
   footer: {
     marginTop: 40,
     paddingTop: 20,
     borderTop: '1pt solid #e0e0e0',
     fontSize: 10,
-    color: '#666',
-  },
+    color: '#666'
+  }
 });
 
 interface InvoicePDFProps {
@@ -115,12 +116,115 @@ interface InvoicePDFProps {
 }
 
 export function InvoicePDF({ invoice }: InvoicePDFProps) {
+  const org = invoice.organization || {};
+  const primaryColor = org.primaryColor || '#2563eb';
+  const secondaryColor = org.secondaryColor || '#64748b';
+  const fontFamily = org.fontFamily || 'Helvetica';
+  const footerText = org.footerText || 'Thank you for your business!';
+
+  // Create dynamic styles with branding
+  const dynamicStyles = StyleSheet.create({
+    page: {
+      padding: 40,
+      fontSize: 12,
+      fontFamily: fontFamily
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 10,
+      color: primaryColor
+    },
+    companyInfo: {
+      marginBottom: 20,
+      fontSize: 10,
+      color: secondaryColor
+    },
+    footer: {
+      marginTop: 40,
+      paddingTop: 20,
+      borderTop: '1pt solid #e0e0e0',
+      fontSize: 10,
+      color: secondaryColor,
+      textAlign: 'center'
+    }
+  });
+
   return (
     <Document>
-      <Page size='A4' style={styles.page}>
+      <Page size='A4' style={dynamicStyles.page}>
         <View style={styles.header}>
-          <Text style={styles.title}>INVOICE</Text>
-          <Text>Invoice #{invoice.invoiceNo}</Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: 20
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                flex: 1,
+                gap: 15
+              }}
+            >
+              {org.logoUrl && (
+                <View>
+                  <Image
+                    src={org.logoUrl}
+                    style={{
+                      maxHeight: 60,
+                      maxWidth: 200,
+                      objectFit: 'contain'
+                    }}
+                  />
+                </View>
+              )}
+              {org.name && (
+                <View style={[dynamicStyles.companyInfo, { flex: 1 }]}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 'bold',
+                      marginBottom: 4
+                    }}
+                  >
+                    {org.name}
+                  </Text>
+                  {org.companyAddress && <Text>{org.companyAddress}</Text>}
+                  {org.companyPhone && <Text>{org.companyPhone}</Text>}
+                  {org.companyEmail && <Text>{org.companyEmail}</Text>}
+                  {org.companyWebsite && <Text>{org.companyWebsite}</Text>}
+                </View>
+              )}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  color: primaryColor,
+                  marginBottom: 5
+                }}
+              >
+                Invoice #{invoice.invoiceNo}
+              </Text>
+              <View style={styles.row}>
+                <Text style={styles.label}>Issue Date:</Text>
+                <Text>{new Date(invoice.issueDate).toLocaleDateString()}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Due Date:</Text>
+                <Text>{new Date(invoice.dueDate).toLocaleDateString()}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Status:</Text>
+                <Text>{invoice.status.toUpperCase()}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         <View style={styles.invoiceInfo}>
@@ -128,22 +232,9 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
             <Text style={styles.sectionTitle}>Bill To:</Text>
             <Text>{invoice.customer?.name}</Text>
             {invoice.customer?.email && <Text>{invoice.customer.email}</Text>}
-            {invoice.customer?.address && <Text>{invoice.customer.address}</Text>}
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.row}>
-              <Text style={styles.label}>Issue Date:</Text>
-              <Text>{new Date(invoice.issueDate).toLocaleDateString()}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Due Date:</Text>
-              <Text>{new Date(invoice.dueDate).toLocaleDateString()}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Status:</Text>
-              <Text>{invoice.status.toUpperCase()}</Text>
-            </View>
+            {invoice.customer?.address && (
+              <Text>{invoice.customer.address}</Text>
+            )}
           </View>
         </View>
 
@@ -214,18 +305,18 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
             {invoice.payments.map((payment: any) => (
               <View key={payment.id} style={styles.row}>
                 <Text>
-                  {new Date(payment.date).toLocaleDateString()} - ${payment.amount.toFixed(2)} ({payment.method})
+                  {new Date(payment.date).toLocaleDateString()} - $
+                  {payment.amount.toFixed(2)} ({payment.method})
                 </Text>
               </View>
             ))}
           </View>
         )}
 
-        <View style={styles.footer}>
-          <Text>Thank you for your business!</Text>
+        <View style={dynamicStyles.footer}>
+          <Text>{footerText}</Text>
         </View>
       </Page>
     </Document>
   );
 }
-
