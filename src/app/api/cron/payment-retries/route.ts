@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { stripe } from '@/lib/stripe';
 import { randomBytes } from 'crypto';
+import { getInvoiceCurrency } from '@/lib/currency';
 
 // Verify cron secret to prevent unauthorized access
 function verifyCronSecret(request: NextRequest): boolean {
@@ -200,11 +201,17 @@ export async function GET(request: NextRequest) {
         // Use the first available payment method
         const paymentMethod = paymentMethods.data[0];
 
+        // Get currency from invoice or organization default
+        const invoiceCurrency = getInvoiceCurrency(
+          payment.invoice as any,
+          (payment.invoice.organization as any)?.defaultCurrency
+        ).toLowerCase(); // Stripe requires lowercase currency codes
+
         // Create a new payment intent for retry
         const paymentIntent = await stripe.paymentIntents.create(
           {
             amount: amountInCents,
-            currency: 'usd',
+            currency: invoiceCurrency,
             customer: payment.stripeCustomerId,
             payment_method: paymentMethod.id,
             confirmation_method: 'automatic',

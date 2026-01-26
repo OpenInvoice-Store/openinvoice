@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { cva } from 'class-variance-authority';
 import { IconGripVertical } from '@tabler/icons-react';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
@@ -28,7 +29,7 @@ const statusColors: Record<string, string> = {
   sent: 'bg-blue-500',
   paid: 'bg-green-500',
   overdue: 'bg-red-500',
-  cancelled: 'bg-gray-400',
+  cancelled: 'bg-gray-400'
 };
 
 const statusLabels: Record<string, string> = {
@@ -36,7 +37,7 @@ const statusLabels: Record<string, string> = {
   sent: 'Sent',
   paid: 'Paid',
   overdue: 'Overdue',
-  cancelled: 'Cancelled',
+  cancelled: 'Cancelled'
 };
 
 export function InvoiceCard({ invoice, isOverlay }: InvoiceCardProps) {
@@ -85,6 +86,13 @@ export function InvoiceCard({ invoice, isOverlay }: InvoiceCardProps) {
     return subtotal + tax;
   }, [invoice.items]);
 
+  const currency = useMemo(() => {
+    return getInvoiceCurrency(
+      invoice as any,
+      (invoice as any).organization?.defaultCurrency
+    );
+  }, [invoice]);
+
   const handleClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking the drag handle
     if ((e.target as HTMLElement).closest('button')) {
@@ -113,31 +121,45 @@ export function InvoiceCard({ invoice, isOverlay }: InvoiceCardProps) {
           <span className='sr-only'>Move invoice</span>
           <IconGripVertical />
         </Button>
-        <Badge 
-          variant={'outline'} 
+        <Badge
+          variant={'outline'}
           className={`ml-auto font-semibold ${statusColors[invoice.status] || 'bg-gray-500'} text-white`}
         >
           {statusLabels[invoice.status] || invoice.status}
         </Badge>
       </CardHeader>
-      <CardContent className='px-3 pt-3 pb-4 text-left space-y-2'>
+      <CardContent className='space-y-2 px-3 pt-3 pb-4 text-left'>
         <div>
-          <p className='font-semibold text-sm'>Invoice #{invoice.invoiceNo}</p>
-          <p className='text-xs text-muted-foreground'>
+          <p className='text-sm font-semibold'>Invoice #{invoice.invoiceNo}</p>
+          <p className='text-muted-foreground text-xs'>
             {invoice.customer?.name || 'Unknown Customer'}
           </p>
         </div>
-        <div className='flex justify-between items-center'>
-          <span className='text-lg font-bold'>{formatCurrency(totalAmount)}</span>
+        <div className='flex items-center justify-between'>
+          <span className='text-lg font-bold'>
+            {formatCurrency(totalAmount, currency)}
+          </span>
         </div>
-        <div className='text-xs text-muted-foreground'>
-          <p>Due: {formatDate(invoice.dueDate, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+        <div className='text-muted-foreground text-xs'>
+          <p>
+            Due:{' '}
+            {formatDate(invoice.dueDate, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })}
+          </p>
           {invoice.issueDate && (
-            <p>Issued: {formatDate(invoice.issueDate, { month: 'short', day: 'numeric' })}</p>
+            <p>
+              Issued:{' '}
+              {formatDate(invoice.issueDate, {
+                month: 'short',
+                day: 'numeric'
+              })}
+            </p>
           )}
         </div>
       </CardContent>
     </Card>
   );
 }
-

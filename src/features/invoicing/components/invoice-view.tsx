@@ -2,7 +2,8 @@
 
 import { useParams } from 'next/navigation';
 import { useInvoice } from '../hooks/use-invoices';
-import { formatDate, formatCurrency } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -133,6 +134,13 @@ export function InvoiceView() {
   const total = subtotal + tax;
   const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
   const balance = total - totalPaid;
+
+  // Get currency from invoice or organization default
+  const currency = getInvoiceCurrency(
+    invoice as any,
+    (invoice as any).organization?.defaultCurrency
+  );
+  console.log('currency', currency);
 
   return (
     <div className='space-y-6'>
@@ -346,13 +354,13 @@ export function InvoiceView() {
                                 {item.quantity}
                               </td>
                               <td className='p-2 text-right'>
-                                {formatCurrency(item.price)}
+                                {formatCurrencyAmount(item.price, currency)}
                               </td>
                               <td className='p-2 text-right'>
                                 {item.taxRate}%
                               </td>
                               <td className='p-2 text-right'>
-                                {formatCurrency(itemTotal)}
+                                {formatCurrencyAmount(itemTotal, currency)}
                               </td>
                             </tr>
                           );
@@ -364,25 +372,27 @@ export function InvoiceView() {
                   <div className='mt-4 ml-auto w-full max-w-xs space-y-2'>
                     <div className='flex justify-between'>
                       <span>Subtotal:</span>
-                      <span>{formatCurrency(subtotal)}</span>
+                      <span>{formatCurrencyAmount(subtotal, currency)}</span>
                     </div>
                     <div className='flex justify-between'>
                       <span>Tax:</span>
-                      <span>{formatCurrency(tax)}</span>
+                      <span>{formatCurrencyAmount(tax, currency)}</span>
                     </div>
                     <div className='flex justify-between border-t pt-2 text-lg font-bold'>
                       <span>Total:</span>
-                      <span>{formatCurrency(total)}</span>
+                      <span>{formatCurrencyAmount(total, currency)}</span>
                     </div>
                     {totalPaid > 0 && (
                       <>
                         <div className='flex justify-between text-green-600'>
                           <span>Paid:</span>
-                          <span>{formatCurrency(totalPaid)}</span>
+                          <span>
+                            {formatCurrencyAmount(totalPaid, currency)}
+                          </span>
                         </div>
                         <div className='flex justify-between border-t pt-2 font-bold'>
                           <span>Balance:</span>
-                          <span>{formatCurrency(balance)}</span>
+                          <span>{formatCurrencyAmount(balance, currency)}</span>
                         </div>
                       </>
                     )}
@@ -806,7 +816,8 @@ export function InvoiceView() {
           <DialogHeader>
             <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
             <DialogDescription>
-              Pay the remaining balance of {formatCurrency(balance)}
+              Pay the remaining balance of{' '}
+              {formatCurrencyAmount(balance, currency)}
             </DialogDescription>
           </DialogHeader>
           <StripePaymentForm

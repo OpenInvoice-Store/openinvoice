@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/format';
 import { format } from 'date-fns';
+import { getInvoiceCurrency } from '@/lib/currency';
 import Link from 'next/link';
 import {
   Table,
@@ -68,6 +69,15 @@ export function RecurringInvoiceView() {
     0
   );
   const total = subtotal + tax;
+
+  // Get currency from template or organization default
+  const currency = getInvoiceCurrency(
+    {
+      currency: (template as any).currency,
+      organization: template.organization
+    },
+    template.organization?.defaultCurrency
+  );
 
   // Calculate statistics from generated invoices
   const invoices = template.invoices || [];
@@ -247,7 +257,7 @@ export function RecurringInvoiceView() {
             <CardHeader className='pb-2'>
               <CardDescription>Total Revenue</CardDescription>
               <CardTitle className='text-2xl'>
-                {formatCurrency(totalRevenue)}
+                {formatCurrency(totalRevenue, currency)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -255,7 +265,7 @@ export function RecurringInvoiceView() {
             <CardHeader className='pb-2'>
               <CardDescription>Total Paid</CardDescription>
               <CardTitle className='text-2xl text-green-600'>
-                {formatCurrency(totalPaid)}
+                {formatCurrency(totalPaid, currency)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -351,6 +361,13 @@ export function RecurringInvoiceView() {
             <Separator />
             <div>
               <div className='text-muted-foreground text-sm font-medium'>
+                Currency
+              </div>
+              <div className='text-sm font-semibold'>{currency}</div>
+            </div>
+            <Separator />
+            <div>
+              <div className='text-muted-foreground text-sm font-medium'>
                 Template Amount
               </div>
               <div className='text-sm font-semibold'>
@@ -359,7 +376,7 @@ export function RecurringInvoiceView() {
                     Variable (usage-based)
                   </span>
                 ) : (
-                  formatCurrency(total)
+                  formatCurrency(total, currency)
                 )}
               </div>
             </div>
@@ -511,13 +528,13 @@ export function RecurringInvoiceView() {
                     <TableCell>{item.description}</TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell className='text-right'>
-                      {formatCurrency(item.price)}
+                      {formatCurrency(item.price, currency)}
                     </TableCell>
                     <TableCell className='text-right'>
                       {item.taxRate}%
                     </TableCell>
                     <TableCell className='text-right'>
-                      {formatCurrency(itemTotal)}
+                      {formatCurrency(itemTotal, currency)}
                     </TableCell>
                   </TableRow>
                 );
@@ -527,13 +544,13 @@ export function RecurringInvoiceView() {
           <div className='mt-4 flex justify-end space-x-4 border-t pt-4 text-sm'>
             <div className='text-right'>
               <div className='text-muted-foreground'>
-                Subtotal: {formatCurrency(subtotal)}
+                Subtotal: {formatCurrency(subtotal, currency)}
               </div>
               <div className='text-muted-foreground'>
-                Tax: {formatCurrency(tax)}
+                Tax: {formatCurrency(tax, currency)}
               </div>
               <div className='font-semibold'>
-                Total: {formatCurrency(total)}
+                Total: {formatCurrency(total, currency)}
               </div>
             </div>
           </div>

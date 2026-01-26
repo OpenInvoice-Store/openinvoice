@@ -1,2 +1,2 @@
--- DropIndex
-DROP INDEX "invoices_templateId_idx";
+-- DropIndex (if exists - this handles migration conflicts)
+DROP INDEX IF EXISTS "invoices_templateId_idx";

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { formatDate, formatCurrency } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,6 +52,12 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
   );
   const balance = total - totalPaid;
 
+  // Get currency from invoice or organization default
+  const currency = getInvoiceCurrency(
+    invoice,
+    invoice.organization?.defaultCurrency
+  );
+  console.log('currency', currency);
   // Calculate payment plan information
   const paymentPlanInfo = useMemo(() => {
     if (!invoice.paymentPlan || invoice.paymentPlan.status !== 'active') {
@@ -197,8 +204,8 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                     >
                       <IconCurrencyDollar className='mr-2 h-4 w-4' />
                       {paymentPlanInfo
-                        ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrency(paymentPlanInfo.amountDue)})`
-                        : `Pay Now (${formatCurrency(balance)})`}
+                        ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrencyAmount(paymentPlanInfo.amountDue, currency)})`
+                        : `Pay Now (${formatCurrencyAmount(balance, currency)})`}
                     </Button>
                   )}
                 <Button
@@ -327,7 +334,7 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                   <div className='flex justify-between text-sm'>
                     <span className='text-muted-foreground'>Paid:</span>
                     <span className='text-green-600'>
-                      {formatCurrency(totalPaid)}
+                      {formatCurrencyAmount(totalPaid, currency)}
                     </span>
                   </div>
                 )}
@@ -454,7 +461,7 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                         <td
                           className={`${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right`}
                         >
-                          {formatCurrency(item.price)}
+                          {formatCurrencyAmount(item.price, currency)}
                         </td>
                         {layout !== 'compact' && (
                           <td className='p-2 text-right'>{item.taxRate}%</td>
@@ -462,7 +469,7 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                         <td
                           className={`${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right`}
                         >
-                          {formatCurrency(itemTotal)}
+                          {formatCurrencyAmount(itemTotal, currency)}
                         </td>
                       </tr>
                     );
@@ -476,11 +483,11 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
             >
               <div className='flex justify-between'>
                 <span className='text-muted-foreground'>Subtotal:</span>
-                <span>{formatCurrency(subtotal)}</span>
+                <span>{formatCurrencyAmount(subtotal, currency)}</span>
               </div>
               <div className='flex justify-between'>
                 <span className='text-muted-foreground'>Tax:</span>
-                <span>{formatCurrency(tax)}</span>
+                <span>{formatCurrencyAmount(tax, currency)}</span>
               </div>
               <div
                 className={`flex justify-between border-t ${layout === 'compact' ? 'pt-1' : 'pt-2'} font-semibold`}
@@ -488,18 +495,18 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
               >
                 <span style={{ color: primaryColor }}>Total:</span>
                 <span style={{ color: primaryColor }}>
-                  {formatCurrency(total)}
+                  {formatCurrencyAmount(total, currency)}
                 </span>
               </div>
               {totalPaid > 0 && (
                 <>
                   <div className='flex justify-between text-green-600'>
                     <span className='text-muted-foreground'>Paid:</span>
-                    <span>{formatCurrency(totalPaid)}</span>
+                    <span>{formatCurrencyAmount(totalPaid, currency)}</span>
                   </div>
                   <div className='flex justify-between border-t pt-2 font-semibold'>
                     <span>Balance:</span>
-                    <span>{formatCurrency(balance)}</span>
+                    <span>{formatCurrencyAmount(balance, currency)}</span>
                   </div>
                 </>
               )}
@@ -516,7 +523,10 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                         paymentPlanInfo.isOverdue ? 'text-red-600' : ''
                       }
                     >
-                      {formatCurrency(paymentPlanInfo.amountDue)}
+                      {formatCurrencyAmount(
+                        paymentPlanInfo.amountDue,
+                        currency
+                      )}
                     </span>
                   </div>
                   <div className='text-muted-foreground mt-1 text-xs'>
@@ -569,7 +579,10 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                       </div>
                       <div className='text-right'>
                         <div className='text-sm font-semibold'>
-                          {formatCurrency(paymentPlanInfo.amountDue)}
+                          {formatCurrencyAmount(
+                            paymentPlanInfo.amountDue,
+                            currency
+                          )}
                         </div>
                         {paymentPlanInfo.isOverdue && (
                           <Badge className='mt-1 bg-red-500 text-xs'>
@@ -635,14 +648,18 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                     {paymentPlanInfo ? (
                       <>
                         Pay Installment #{paymentPlanInfo.installmentNumber} of{' '}
-                        {formatCurrency(paymentPlanInfo.amountDue)}
+                        {formatCurrencyAmount(
+                          paymentPlanInfo.amountDue,
+                          currency
+                        )}
                         {paymentPlanInfo.isOverdue && (
                           <span className='ml-2 text-red-600'>(Overdue)</span>
                         )}
                       </>
                     ) : (
                       <>
-                        Pay the remaining balance of {formatCurrency(balance)}
+                        Pay the remaining balance of{' '}
+                        {formatCurrencyAmount(balance, currency)}
                       </>
                     )}
                   </DialogDescription>

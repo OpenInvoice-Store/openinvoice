@@ -5,6 +5,7 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Calendar, DollarSign, FileText } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Payment } from '@/features/invoicing/hooks/use-payments';
@@ -62,9 +63,15 @@ export const customerPaymentColumns: ColumnDef<Payment>[] = [
     header: ({ column }: { column: Column<Payment, unknown> }) => (
       <DataTableColumnHeader column={column} title='Amount' />
     ),
-    cell: ({ cell }) => {
-      const amount = cell.getValue<Payment['amount']>();
-      return <div className='font-medium'>{formatCurrency(amount)}</div>;
+    cell: ({ row }) => {
+      const amount = row.original.amount;
+      const invoice = row.original.invoice as any;
+      const currency = invoice
+        ? getInvoiceCurrency(invoice, invoice.organization?.defaultCurrency)
+        : 'USD';
+      return (
+        <div className='font-medium'>{formatCurrency(amount, currency)}</div>
+      );
     },
     meta: {
       label: 'Amount',

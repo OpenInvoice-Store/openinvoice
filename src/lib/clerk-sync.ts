@@ -4,13 +4,13 @@ import { prisma } from '@/lib/db';
 /**
  * Syncs user and organization data from Clerk to the database.
  * This is a fallback mechanism when webhooks fail or haven't fired yet.
- * 
+ *
  * @returns The synced user and organization, or null if user is not authenticated
  */
 export async function syncUserAndOrganization() {
   try {
     const { userId, orgId } = await auth();
-    
+
     if (!userId) {
       return null;
     }
@@ -22,9 +22,10 @@ export async function syncUserAndOrganization() {
     }
 
     // Sync user to database
-    const primaryEmail = clerkUser.emailAddresses?.find(
-      (email) => email.id === clerkUser.primaryEmailAddressId
-    )?.emailAddress || clerkUser.emailAddresses?.[0]?.emailAddress;
+    const primaryEmail =
+      clerkUser.emailAddresses?.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId
+      )?.emailAddress || clerkUser.emailAddresses?.[0]?.emailAddress;
 
     const user = await prisma.user.upsert({
       where: { clerkUserId: userId },
@@ -33,7 +34,7 @@ export async function syncUserAndOrganization() {
         firstName: clerkUser.firstName || null,
         lastName: clerkUser.lastName || null,
         imageUrl: clerkUser.imageUrl || null,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       },
       create: {
         id: userId,
@@ -41,8 +42,8 @@ export async function syncUserAndOrganization() {
         email: primaryEmail || null,
         firstName: clerkUser.firstName || null,
         lastName: clerkUser.lastName || null,
-        imageUrl: clerkUser.imageUrl || null,
-      },
+        imageUrl: clerkUser.imageUrl || null
+      }
     });
 
     // If there's an active organization, sync it too
@@ -54,13 +55,13 @@ export async function syncUserAndOrganization() {
       organization = await prisma.organization.upsert({
         where: { clerkOrgId: orgId },
         update: {
-          updatedAt: new Date(),
+          updatedAt: new Date()
         },
         create: {
           id: orgId,
           clerkOrgId: orgId,
-          name: 'Unnamed Organization', // Default name, webhook will update with real name
-        },
+          name: 'Unnamed Organization' // Default name, webhook will update with real name
+        }
       });
 
       // Ensure user is a member of the organization
@@ -68,17 +69,17 @@ export async function syncUserAndOrganization() {
         where: {
           userId_organizationId: {
             userId: user.id,
-            organizationId: organization.id,
-          },
+            organizationId: organization.id
+          }
         },
         update: {
-          updatedAt: new Date(),
+          updatedAt: new Date()
         },
         create: {
           userId: user.id,
           organizationId: organization.id,
-          role: 'member', // Default role, webhook will update with real role
-        },
+          role: 'member' // Default role, webhook will update with real role
+        }
       });
     }
 
@@ -92,13 +93,13 @@ export async function syncUserAndOrganization() {
 /**
  * Ensures the user and organization exist in the database.
  * This is a lightweight check that syncs if needed.
- * 
+ *
  * @returns The organization ID if available, or null
  */
 export async function ensureUserAndOrganization() {
   try {
     const { userId, orgId } = await auth();
-    
+
     if (!userId) {
       return null;
     }
@@ -106,6 +107,7 @@ export async function ensureUserAndOrganization() {
     // Quick check if user exists
     const existingUser = await prisma.user.findUnique({
       where: { clerkUserId: userId },
+      select: { id: true, clerkUserId: true } // Only select fields that definitely exist
     });
 
     // If user doesn't exist, sync everything
@@ -118,6 +120,7 @@ export async function ensureUserAndOrganization() {
     if (orgId) {
       const existingOrg = await prisma.organization.findUnique({
         where: { clerkOrgId: orgId },
+        select: { id: true, clerkOrgId: true } // Only select fields that definitely exist
       });
 
       if (!existingOrg) {
@@ -132,4 +135,3 @@ export async function ensureUserAndOrganization() {
     return null;
   }
 }
-

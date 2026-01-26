@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useInvoice } from '@/features/invoicing/hooks/use-invoices';
 import { formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentsList } from '@/features/invoicing/components/payments-list';
 import { PaymentForm } from '@/features/invoicing/components/payment-form';
@@ -65,6 +66,10 @@ export default function InvoicePaymentsPage() {
   const total = subtotal + tax;
   const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
   const balance = total - totalPaid;
+  const currency = getInvoiceCurrency(
+    invoice as any,
+    (invoice as any).organization?.defaultCurrency
+  );
 
   return (
     <div className='space-y-6 p-6'>
@@ -112,7 +117,7 @@ export default function InvoicePaymentsPage() {
           <DialogHeader>
             <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
             <DialogDescription>
-              Pay the remaining balance of {formatCurrency(balance)}
+              Pay the remaining balance of {formatCurrency(balance, currency)}
             </DialogDescription>
           </DialogHeader>
           <StripePaymentForm

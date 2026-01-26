@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
             companyPhone: true,
             companyEmail: true,
             companyWebsite: true,
-            footerText: true
+            footerText: true,
+            defaultCurrency: true
           } as any
         },
         invoiceTemplate: true
@@ -219,7 +220,8 @@ export async function GET(request: NextRequest) {
             companyPhone: true,
             companyEmail: true,
             companyWebsite: true,
-            footerText: true
+            footerText: true,
+            defaultCurrency: true
           } as any
         },
         invoiceTemplate: true

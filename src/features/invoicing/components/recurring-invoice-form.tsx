@@ -37,6 +37,8 @@ import { useParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { formatCurrency } from '@/lib/format';
+import { CURRENCIES } from '@/lib/currency';
+import { useBrandingSettings } from '../hooks/use-branding';
 
 const recurringInvoiceItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -69,7 +71,8 @@ const recurringInvoiceSchema = z
     daysUntilDue: z.number().min(1),
     autoSendEmail: z.boolean(),
     isUsageBased: z.boolean(),
-    usageUnit: z.string().optional().nullable()
+    usageUnit: z.string().optional().nullable(),
+    currency: z.string().min(3).max(3).optional()
   })
   .superRefine((data, ctx) => {
     // If usage-based, usage unit is required
@@ -93,6 +96,7 @@ export function RecurringInvoiceForm() {
   const { data: template, isLoading } = useRecurringInvoice(id || '');
   const { data: customers } = useCustomers();
   const { data: products } = useProducts();
+  const { data: branding } = useBrandingSettings();
   const createRecurringInvoice = useCreateRecurringInvoice();
   const updateRecurringInvoice = useUpdateRecurringInvoice();
 
@@ -112,7 +116,8 @@ export function RecurringInvoiceForm() {
       daysUntilDue: 30,
       autoSendEmail: true,
       isUsageBased: false,
-      usageUnit: null
+      usageUnit: null,
+      currency: branding?.defaultCurrency || 'USD'
     }
   });
 
@@ -126,6 +131,12 @@ export function RecurringInvoiceForm() {
       const items = JSON.parse(
         template.templateItems
       ) as RecurringInvoiceTemplateItem[];
+      // Get currency from template or organization default
+      const templateCurrency =
+        (template as any).currency ||
+        (template as any).organization?.defaultCurrency ||
+        branding?.defaultCurrency ||
+        'USD';
       form.reset({
         name: template.name,
         customerId: template.customerId,
@@ -138,10 +149,11 @@ export function RecurringInvoiceForm() {
         daysUntilDue: template.daysUntilDue,
         autoSendEmail: template.autoSendEmail,
         isUsageBased: template.isUsageBased || false,
-        usageUnit: template.usageUnit || null
+        usageUnit: template.usageUnit || null,
+        currency: templateCurrency
       });
     }
-  }, [template, isEditing, form]);
+  }, [template, isEditing, form, branding]);
 
   const handleProductChange = (index: number, productId: string) => {
     const product = products?.find((p) => p.id === productId);
@@ -369,6 +381,39 @@ export function RecurringInvoiceForm() {
           )}
         />
 
+        <FormField
+          control={form.control}
+          name='currency'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Currency</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value || branding?.defaultCurrency || 'USD'}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder='Select currency' />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CURRENCIES.map((currency) => (
+                    <SelectItem key={currency.code} value={currency.code}>
+                      {currency.code} - {currency.name} ({currency.symbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Currency for invoices generated from this template
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className='grid grid-cols-1 gap-4'>
         <FormField
           control={form.control}
           name='autoSendEmail'
@@ -607,13 +652,15 @@ export function RecurringInvoiceForm() {
         <div className='mt-4 flex justify-end space-x-4 border-t pt-4'>
           <div className='text-right'>
             <div className='text-muted-foreground text-sm'>
-              Subtotal: {formatCurrency(totals.subtotal)}
+              Subtotal:{' '}
+              {formatCurrency(totals.subtotal, form.watch('currency') || 'USD')}
             </div>
             <div className='text-muted-foreground text-sm'>
-              Tax: {formatCurrency(totals.tax)}
+              Tax: {formatCurrency(totals.tax, form.watch('currency') || 'USD')}
             </div>
             <div className='text-lg font-semibold'>
-              Total: {formatCurrency(totals.total)}
+              Total:{' '}
+              {formatCurrency(totals.total, form.watch('currency') || 'USD')}
             </div>
           </div>
         </div>

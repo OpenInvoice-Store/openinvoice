@@ -24,12 +24,21 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
+import { useInvoice } from '../hooks/use-invoices';
 import { useState } from 'react';
 
 export function PaymentsList({ invoiceId }: { invoiceId: string }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const { data: payments, isLoading } = usePayments(invoiceId);
+  const { data: invoice } = useInvoice(invoiceId);
   const deletePayment = useDeletePayment();
+  const currency = invoice
+    ? getInvoiceCurrency(
+        invoice as any,
+        (invoice as any).organization?.defaultCurrency
+      )
+    : 'USD';
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -78,7 +87,7 @@ export function PaymentsList({ invoiceId }: { invoiceId: string }) {
                 <TableRow key={payment.id}>
                   <TableCell>{formatDate(payment.date)}</TableCell>
                   <TableCell className='font-medium'>
-                    {formatCurrency(payment.amount)}
+                    {formatCurrency(payment.amount, currency)}
                   </TableCell>
                   <TableCell>{payment.method}</TableCell>
                   <TableCell>

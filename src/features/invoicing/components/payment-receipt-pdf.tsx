@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 
 const styles = StyleSheet.create({
   page: {
@@ -95,7 +96,11 @@ export function PaymentReceiptPDF({
   const previousPaid = totalPaid - payment.amount;
   const remainingBalance = total - totalPaid;
 
-  const formatMoney = (value: number) => `$${value.toFixed(2)}`;
+  const currency = getInvoiceCurrency(
+    invoice,
+    invoice.organization?.defaultCurrency
+  );
+  const formatMoney = (value: number) => formatCurrencyAmount(value, currency);
 
   return (
     <Document>

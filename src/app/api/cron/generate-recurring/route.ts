@@ -158,6 +158,12 @@ export async function GET(request: NextRequest) {
           }));
         }
 
+        // Get currency from template or organization default
+        const invoiceCurrency =
+          (template as any).currency ||
+          (template.organization as any)?.defaultCurrency ||
+          'USD';
+
         // Generate invoice
         const invoice = await prisma.$transaction(
           async (tx) => {
@@ -182,6 +188,7 @@ export async function GET(request: NextRequest) {
                 status: template.autoSendEmail ? 'sent' : 'draft',
                 notes: template.templateNotes || null,
                 recurringTemplateId: template.id,
+                currency: invoiceCurrency,
                 items: {
                   create: invoiceItems
                 }

@@ -43,7 +43,8 @@ export async function GET(
             companyPhone: true,
             companyEmail: true,
             companyWebsite: true,
-            footerText: true
+            footerText: true,
+            defaultCurrency: true
           }
         },
         invoiceTemplate: true

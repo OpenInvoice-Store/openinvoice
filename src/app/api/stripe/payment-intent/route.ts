@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { stripe, calculatePlatformFee } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
+import { getInvoiceCurrency } from '@/lib/currency';
 
 export async function POST(request: NextRequest) {
   try {
@@ -217,12 +218,18 @@ export async function POST(request: NextRequest) {
     const preferredPaymentMethodId =
       (customer as any)?.preferredPaymentMethodId || null;
 
+    // Get currency from invoice or organization default
+    const invoiceCurrency = getInvoiceCurrency(
+      invoice as any,
+      (org as any)?.defaultCurrency
+    ).toLowerCase(); // Stripe requires lowercase currency codes
+
     // For Stripe Connect Express accounts, create payment intent on PLATFORM account
     // and use on_behalf_of + transfer_data to route funds to connected account
     // This allows the client secret to work with the platform's publishable key
     const paymentIntentParams: any = {
       amount: amountInCents,
-      currency: 'usd', // You might want to make this configurable
+      currency: invoiceCurrency,
       customer: customerId || undefined,
       // Use preferred payment method if available
       ...(preferredPaymentMethodId && customerId

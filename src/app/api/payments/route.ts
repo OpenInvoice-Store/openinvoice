@@ -37,7 +37,12 @@ export async function GET(request: NextRequest) {
       include: {
         invoice: {
           include: {
-            customer: true
+            customer: true,
+            organization: {
+              select: {
+                defaultCurrency: true
+              }
+            }
           }
         }
       },

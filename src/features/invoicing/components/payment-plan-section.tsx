@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { usePaymentPlan } from '../hooks/use-payment-plan';
-import { formatDate, formatCurrency } from '@/lib/format';
+import { useInvoice } from '../hooks/use-invoices';
+import { formatDate } from '@/lib/format';
+import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,8 +74,15 @@ export function PaymentPlanSection({
 }: PaymentPlanSectionProps) {
   const { paymentPlan, isLoading, createPaymentPlan, deletePaymentPlan } =
     usePaymentPlan(invoiceId);
+  const { data: invoice } = useInvoice(invoiceId);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Get currency from invoice or organization default
+  const currency = getInvoiceCurrency(
+    invoice as any,
+    (invoice as any)?.organization?.defaultCurrency
+  );
 
   const form = useForm<PaymentPlanFormData>({
     resolver: zodResolver(paymentPlanSchema),
@@ -139,7 +148,8 @@ export function PaymentPlanSection({
                 <DialogTitle>Create Payment Plan</DialogTitle>
                 <DialogDescription>
                   Split the remaining balance of{' '}
-                  {formatCurrency(remainingAmount)} into installments.
+                  {formatCurrencyAmount(remainingAmount, currency)} into
+                  installments.
                 </DialogDescription>
               </DialogHeader>
               <Form
@@ -300,7 +310,7 @@ export function PaymentPlanSection({
             <div>
               <span className='text-muted-foreground'>Total Amount:</span>
               <p className='font-medium'>
-                {formatCurrency(paymentPlan.totalAmount)}
+                {formatCurrencyAmount(paymentPlan.totalAmount, currency)}
               </p>
             </div>
             <div>
@@ -331,8 +341,8 @@ export function PaymentPlanSection({
                       <div className='text-muted-foreground mt-1 text-xs'>
                         {installment.totalPaid !== undefined &&
                         installment.remaining !== undefined
-                          ? `${formatCurrency(installment.totalPaid)} / ${formatCurrency(installment.amount)}`
-                          : formatCurrency(installment.amount)}
+                          ? `${formatCurrencyAmount(installment.totalPaid, currency)} / ${formatCurrencyAmount(installment.amount, currency)}`
+                          : formatCurrencyAmount(installment.amount, currency)}
                       </div>
                     </div>
                   </div>

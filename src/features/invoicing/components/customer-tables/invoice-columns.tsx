@@ -5,6 +5,7 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Calendar, DollarSign, Hash } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Invoice } from '@/features/invoicing/hooks/use-customers';
@@ -129,8 +130,15 @@ export const customerInvoiceColumns: ColumnDef<Invoice>[] = [
     ),
     cell: ({ row }) => {
       const total = calculateTotal(row.original);
+      const invoice = row.original as any;
+      const currency = getInvoiceCurrency(
+        invoice,
+        invoice.organization?.defaultCurrency
+      );
       return (
-        <div className='text-right font-medium'>{formatCurrency(total)}</div>
+        <div className='text-right font-medium'>
+          {formatCurrency(total, currency)}
+        </div>
       );
     },
     meta: {

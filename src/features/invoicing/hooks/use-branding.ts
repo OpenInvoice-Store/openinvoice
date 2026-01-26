@@ -11,6 +11,7 @@ export interface BrandingSettings {
   companyEmail?: string | null;
   companyWebsite?: string | null;
   footerText?: string | null;
+  defaultCurrency?: string;
 }
 
 export function useBrandingSettings() {

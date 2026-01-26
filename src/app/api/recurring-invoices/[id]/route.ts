@@ -162,6 +162,7 @@ export async function PUT(
     if (body.isUsageBased !== undefined)
       updateData.isUsageBased = body.isUsageBased;
     if (body.usageUnit !== undefined) updateData.usageUnit = body.usageUnit;
+    if (body.currency !== undefined) updateData.currency = body.currency;
 
     const updatedTemplate = await prisma.recurringInvoiceTemplate.update({
       where: { id },

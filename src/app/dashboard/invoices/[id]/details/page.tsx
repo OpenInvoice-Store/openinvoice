@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useInvoice } from '@/features/invoicing/hooks/use-invoices';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentPlanSection } from '@/features/invoicing/components/payment-plan-section';
 
@@ -31,6 +32,10 @@ export default function InvoiceDetailsPage() {
   const total = subtotal + tax;
   const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
   const balance = total - totalPaid;
+  const currency = getInvoiceCurrency(
+    invoice as any,
+    (invoice as any).organization?.defaultCurrency
+  );
 
   return (
     <div className='space-y-6 p-6'>
@@ -111,11 +116,11 @@ export default function InvoiceDetailsPage() {
                       <td className='p-2'>{item.description}</td>
                       <td className='p-2 text-right'>{item.quantity}</td>
                       <td className='p-2 text-right'>
-                        {formatCurrency(item.price)}
+                        {formatCurrency(item.price, currency)}
                       </td>
                       <td className='p-2 text-right'>{item.taxRate}%</td>
                       <td className='p-2 text-right'>
-                        {formatCurrency(itemTotal)}
+                        {formatCurrency(itemTotal, currency)}
                       </td>
                     </tr>
                   );
@@ -127,25 +132,25 @@ export default function InvoiceDetailsPage() {
           <div className='mt-4 ml-auto w-full max-w-xs space-y-2 text-sm'>
             <div className='flex justify-between'>
               <span className='text-muted-foreground'>Subtotal:</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatCurrency(subtotal, currency)}</span>
             </div>
             <div className='flex justify-between'>
               <span className='text-muted-foreground'>Tax:</span>
-              <span>{formatCurrency(tax)}</span>
+              <span>{formatCurrency(tax, currency)}</span>
             </div>
             <div className='flex justify-between border-t pt-2 font-semibold'>
               <span>Total:</span>
-              <span>{formatCurrency(total)}</span>
+              <span>{formatCurrency(total, currency)}</span>
             </div>
             {totalPaid > 0 && (
               <>
                 <div className='flex justify-between text-green-600'>
                   <span className='text-muted-foreground'>Paid:</span>
-                  <span>{formatCurrency(totalPaid)}</span>
+                  <span>{formatCurrency(totalPaid, currency)}</span>
                 </div>
                 <div className='flex justify-between border-t pt-2 font-semibold'>
                   <span>Balance:</span>
-                  <span>{formatCurrency(balance)}</span>
+                  <span>{formatCurrency(balance, currency)}</span>
                 </div>
               </>
             )}

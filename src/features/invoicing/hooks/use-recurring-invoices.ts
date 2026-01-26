@@ -26,6 +26,7 @@ export interface RecurringInvoiceTemplate {
   lastGeneratedAt: string | null;
   isUsageBased: boolean;
   usageUnit: string | null;
+  currency: string | null;
   createdAt: string;
   updatedAt: string;
   customer?: {
@@ -36,6 +37,7 @@ export interface RecurringInvoiceTemplate {
   organization?: {
     id: string;
     name: string;
+    defaultCurrency?: string;
   };
   invoices?: Array<{
     id: string;
@@ -114,6 +116,9 @@ export function useCreateRecurringInvoice() {
       templateNotes?: string;
       daysUntilDue?: number;
       autoSendEmail?: boolean;
+      isUsageBased?: boolean;
+      usageUnit?: string | null;
+      currency?: string;
     }) => {
       const res = await fetch('/api/recurring-invoices', {
         method: 'POST',
@@ -153,6 +158,9 @@ export function useUpdateRecurringInvoice() {
       daysUntilDue?: number;
       status?: string;
       autoSendEmail?: boolean;
+      isUsageBased?: boolean;
+      usageUnit?: string | null;
+      currency?: string;
     }) => {
       const body: any = { ...data };
       if (data.templateItems) {

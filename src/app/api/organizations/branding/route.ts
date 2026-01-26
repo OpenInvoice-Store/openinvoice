@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
         companyPhone: true,
         companyEmail: true,
         companyWebsite: true,
-        footerText: true
+        footerText: true,
+        defaultCurrency: true
       }
     });
 
@@ -74,7 +75,8 @@ export async function PUT(request: NextRequest) {
       companyPhone,
       companyEmail,
       companyWebsite,
-      footerText
+      footerText,
+      defaultCurrency
     } = body;
 
     // Validate color format if provided
@@ -112,6 +114,38 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Validate currency code if provided
+    if (defaultCurrency) {
+      const validCurrencyCodes = [
+        'USD',
+        'EUR',
+        'GBP',
+        'JPY',
+        'AUD',
+        'CAD',
+        'CHF',
+        'CNY',
+        'INR',
+        'SGD',
+        'HKD',
+        'NZD',
+        'MXN',
+        'BRL',
+        'ZAR',
+        'SEK',
+        'NOK',
+        'DKK',
+        'PLN',
+        'AED'
+      ];
+      if (!validCurrencyCodes.includes(defaultCurrency)) {
+        return NextResponse.json(
+          { error: 'Invalid currency code' },
+          { status: 400 }
+        );
+      }
+    }
+
     const updateData: any = {};
     if (logoUrl !== undefined) updateData.logoUrl = logoUrl || null;
     if (primaryColor !== undefined)
@@ -128,6 +162,8 @@ export async function PUT(request: NextRequest) {
     if (companyWebsite !== undefined)
       updateData.companyWebsite = companyWebsite || null;
     if (footerText !== undefined) updateData.footerText = footerText || null;
+    if (defaultCurrency !== undefined)
+      updateData.defaultCurrency = defaultCurrency;
 
     const updated = await prisma.organization.update({
       where: { id: orgId },
@@ -143,7 +179,8 @@ export async function PUT(request: NextRequest) {
         companyPhone: true,
         companyEmail: true,
         companyWebsite: true,
-        footerText: true
+        footerText: true,
+        defaultCurrency: true
       }
     });
 

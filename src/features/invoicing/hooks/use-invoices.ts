@@ -25,6 +25,10 @@ export interface Invoice {
   notes?: string | null;
   shareToken?: string | null;
   emailSentCount?: number;
+  currency?: string | null;
+  organization?: {
+    defaultCurrency: string;
+  };
   createdAt: string;
   updatedAt: string;
   // Payment reminder tracking
@@ -87,6 +91,7 @@ export function useCreateInvoice() {
       status?: string;
       notes?: string;
       templateId?: string | null;
+      currency?: string;
       items: Array<{
         productId: string;
         description: string;
@@ -118,6 +123,7 @@ export function useUpdateInvoice() {
     }: Partial<Invoice> & {
       id: string;
       templateId?: string | null;
+      currency?: string;
       items?: Array<{
         productId: string;
         description: string;

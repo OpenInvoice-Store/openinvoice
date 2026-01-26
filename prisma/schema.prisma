@@ -81,6 +81,9 @@ model Invoice {
   invoiceTemplate             InvoiceTemplate?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
   templateId                  String?
 
+  // Currency
+  currency                    String?                   // ISO 4217 currency code (e.g., USD, EUR, GBP). If null, uses organization defaultCurrency
+
   @@unique([organizationId, invoiceNo])
   @@index([organizationId, createdAt])
   @@index([status, dueDate])  // For finding overdue invoices
@@ -183,6 +186,9 @@ model Organization {
   companyEmail           String?         // Company email
   companyWebsite         String?         // Company website URL
   footerText             String?         // Footer text for invoices
+  
+  // Currency settings
+  defaultCurrency        String          @default("USD") // ISO 4217 currency code (e.g., USD, EUR, GBP)
   
   invoiceTemplates       InvoiceTemplate[] // Invoice templates
 
@@ -309,6 +315,9 @@ model RecurringInvoiceTemplate {
   // Usage-based billing
   isUsageBased      Boolean      @default(false) // Whether this template uses usage-based billing
   usageUnit         String?      // Unit of measurement for usage (e.g., "GB", "API calls", "hours")
+  
+  // Currency
+  currency          String?      // ISO 4217 currency code (e.g., USD, EUR, GBP). If null, uses organization defaultCurrency
   
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt

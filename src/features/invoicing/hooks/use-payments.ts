@@ -22,8 +22,12 @@ export interface Payment {
   invoice?: {
     id: string;
     invoiceNo: number;
+    currency?: string | null;
     customer?: {
       name: string;
+    };
+    organization?: {
+      defaultCurrency: string;
     };
   };
 }

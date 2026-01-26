@@ -29,6 +29,14 @@ import {
   useUpdateBrandingSettings,
   useUploadBrandingLogo
 } from '../hooks/use-branding';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { CURRENCIES } from '@/lib/currency';
 
 const brandingSchema = z.object({
   logoUrl: z.string().url().optional().nullable().or(z.literal('')),
@@ -59,7 +67,8 @@ const brandingSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal('')),
-  footerText: z.string().optional().nullable()
+  footerText: z.string().optional().nullable(),
+  defaultCurrency: z.string().min(3).max(3).default('USD').optional()
 });
 
 type BrandingFormData = z.infer<typeof brandingSchema>;
@@ -82,7 +91,8 @@ export function BrandingSettings() {
       companyPhone: null,
       companyEmail: null,
       companyWebsite: null,
-      footerText: null
+      footerText: null,
+      defaultCurrency: 'USD'
     }
   });
 
@@ -98,7 +108,8 @@ export function BrandingSettings() {
         companyPhone: branding.companyPhone || null,
         companyEmail: branding.companyEmail || null,
         companyWebsite: branding.companyWebsite || null,
-        footerText: branding.footerText || null
+        footerText: branding.footerText || null,
+        defaultCurrency: branding.defaultCurrency || 'USD'
       });
     }
   }, [branding, form]);
@@ -302,6 +313,45 @@ export function BrandingSettings() {
                 </FormControl>
                 <FormDescription>
                   Font family for invoices (default: system fonts)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Default Currency */}
+          <FormField
+            control={form.control}
+            name='defaultCurrency'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Default Currency</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value || 'USD'}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder='Select currency' />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {CURRENCIES.map((currency) => (
+                      <SelectItem
+                        key={currency.code}
+                        value={
+                          currency.code || branding?.defaultCurrency || 'USD'
+                        }
+                      >
+                        {currency.code} - {currency.name} ({currency.symbol})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Current currency: {branding?.defaultCurrency}
+                  Default currency for new invoices. Can be overridden per
+                  invoice.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

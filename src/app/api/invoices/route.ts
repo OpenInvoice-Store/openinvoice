@@ -61,8 +61,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, templateId, items } =
-      body;
+    const {
+      customerId,
+      dueDate,
+      issueDate,
+      status,
+      notes,
+      templateId,
+      items,
+      currency
+    } = body;
 
     if (!customerId || !dueDate || !items || items.length === 0) {
       return NextResponse.json(
@@ -96,6 +104,15 @@ export async function POST(request: NextRequest) {
       finalTemplateId = defaultTemplate?.id || null;
     }
 
+    // Get organization's default currency if currency not provided
+    let finalCurrency = currency;
+    if (!finalCurrency) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: orgId }
+      });
+      finalCurrency = (organization as any)?.defaultCurrency || 'USD';
+    }
+
     // Create invoice with atomic counter increment
     // Single transaction, no retries needed, zero race conditions
     const invoice = await prisma.$transaction(
@@ -117,6 +134,7 @@ export async function POST(request: NextRequest) {
             issueDate: issueDate ? new Date(issueDate) : new Date(),
             status: status || 'draft',
             notes,
+            currency: finalCurrency,
             ...(finalTemplateId && { templateId: finalTemplateId }),
             items: {
               create: items.map((item: any) => ({

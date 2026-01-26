@@ -35,6 +35,8 @@ import { useEffect } from 'react';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { formatCurrency } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
+import { useBrandingSettings } from '../hooks/use-branding';
+import { CURRENCIES } from '@/lib/currency';
 
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -51,6 +53,7 @@ const invoiceSchema = z.object({
   status: z.string().min(1, 'Status is required'),
   notes: z.string().optional(),
   templateId: z.string().optional().nullable(),
+  currency: z.string().min(3).max(3).optional(),
   items: z.array(invoiceItemSchema).min(1, 'At least one item is required')
 });
 
@@ -65,6 +68,7 @@ export function InvoiceForm() {
   const { data: invoice, isLoading } = useInvoice(id || '');
   const { data: customers } = useCustomers();
   const { data: products } = useProducts();
+  const { data: branding } = useBrandingSettings();
   const { data: templates = [] } = useQuery<
     Array<{ id: string; name: string; isDefault: boolean }>
   >({
@@ -91,6 +95,7 @@ export function InvoiceForm() {
       status: 'draft',
       notes: '',
       templateId: defaultTemplate?.id || null,
+      currency: branding?.defaultCurrency || 'USD',
       items: [
         { productId: '', description: '', quantity: 1, price: 0, taxRate: 0 }
       ]
@@ -104,6 +109,13 @@ export function InvoiceForm() {
 
   useEffect(() => {
     if (invoice && isEditing) {
+      // Get currency from invoice or organization default
+      const invoiceCurrency =
+        (invoice as any).currency ||
+        (invoice as any).organization?.defaultCurrency ||
+        branding?.defaultCurrency ||
+        'USD';
+
       form.reset({
         customerId: invoice.customerId,
         issueDate: invoice.issueDate.split('T')[0],
@@ -111,6 +123,7 @@ export function InvoiceForm() {
         status: invoice.status,
         notes: invoice.notes || '',
         templateId: (invoice as any).templateId || null,
+        currency: invoiceCurrency,
         items: invoice.items.map((item) => ({
           productId: item.productId,
           description: item.description,
@@ -156,6 +169,7 @@ export function InvoiceForm() {
           status: data.status,
           notes: data.notes,
           templateId: data.templateId || undefined,
+          currency: data.currency,
           items: data.items.map((item) => ({
             productId: item.productId,
             description: item.description,
@@ -168,7 +182,8 @@ export function InvoiceForm() {
       } else {
         await createInvoice.mutateAsync({
           ...data,
-          templateId: data.templateId || undefined
+          templateId: data.templateId || undefined,
+          currency: data.currency
         });
         toast.success('Invoice created successfully');
       }
@@ -245,36 +260,68 @@ export function InvoiceForm() {
         />
       </div>
 
-      <FormField
-        control={form.control}
-        name='templateId'
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Invoice Template</FormLabel>
-            <Select
-              onValueChange={(value) =>
-                field.onChange(value === 'none' ? null : value)
-              }
-              value={field.value || 'none'}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder='Select template (optional)' />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value='none'>No Template (Use Default)</SelectItem>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    {template.name} {template.isDefault && '(Default)'}
+      <div className='grid grid-cols-2 gap-4'>
+        <FormField
+          control={form.control}
+          name='templateId'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Invoice Template</FormLabel>
+              <Select
+                onValueChange={(value) =>
+                  field.onChange(value === 'none' ? null : value)
+                }
+                value={field.value || 'none'}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder='Select template (optional)' />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value='none'>
+                    No Template (Use Default)
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} {template.isDefault && '(Default)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name='currency'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Currency</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value || branding?.defaultCurrency || 'USD'}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder='Select currency' />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CURRENCIES.map((currency) => (
+                    <SelectItem key={currency.code} value={currency.code}>
+                      {currency.code} - {currency.name} ({currency.symbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
 
       <div className='grid grid-cols-2 gap-4'>
         <FormField
@@ -456,15 +503,21 @@ export function InvoiceForm() {
       <div className='ml-auto w-64 space-y-2 rounded-md border p-4'>
         <div className='flex justify-between'>
           <span>Subtotal:</span>
-          <span>{formatCurrency(totals.subtotal)}</span>
+          <span>
+            {formatCurrency(totals.subtotal, form.watch('currency') || 'USD')}
+          </span>
         </div>
         <div className='flex justify-between'>
           <span>Tax:</span>
-          <span>{formatCurrency(totals.tax)}</span>
+          <span>
+            {formatCurrency(totals.tax, form.watch('currency') || 'USD')}
+          </span>
         </div>
         <div className='flex justify-between border-t pt-2 text-lg font-bold'>
           <span>Total:</span>
-          <span>{formatCurrency(totals.total)}</span>
+          <span>
+            {formatCurrency(totals.total, form.watch('currency') || 'USD')}
+          </span>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useRecurringInvoice } from '@/features/invoicing/hooks/use-recurring-invoices';
 import { formatCurrency } from '@/lib/format';
 import { format } from 'date-fns';
+import { getInvoiceCurrency } from '@/lib/currency';
 import {
   Card,
   CardContent,
@@ -67,6 +68,15 @@ export default function RecurringInvoiceOverviewPage() {
     0
   );
   const total = subtotal + tax;
+
+  // Get currency from template or organization default
+  const currency = getInvoiceCurrency(
+    {
+      currency: (template as any).currency,
+      organization: template.organization
+    },
+    template.organization?.defaultCurrency
+  );
 
   // Calculate statistics from generated invoices
   const invoices = template.invoices || [];
@@ -155,7 +165,7 @@ export default function RecurringInvoiceOverviewPage() {
             <CardHeader className='pb-2'>
               <CardDescription>Total Revenue</CardDescription>
               <CardTitle className='text-2xl'>
-                {formatCurrency(totalRevenue)}
+                {formatCurrency(totalRevenue, currency)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -163,7 +173,7 @@ export default function RecurringInvoiceOverviewPage() {
             <CardHeader className='pb-2'>
               <CardDescription>Total Paid</CardDescription>
               <CardTitle className='text-2xl text-green-600'>
-                {formatCurrency(totalPaid)}
+                {formatCurrency(totalPaid, currency)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -299,6 +309,13 @@ export default function RecurringInvoiceOverviewPage() {
             <Separator />
             <div>
               <div className='text-muted-foreground text-sm font-medium'>
+                Currency
+              </div>
+              <div className='text-sm font-semibold'>{currency}</div>
+            </div>
+            <Separator />
+            <div>
+              <div className='text-muted-foreground text-sm font-medium'>
                 Template Amount
               </div>
               <div className='text-sm font-semibold'>
@@ -307,7 +324,7 @@ export default function RecurringInvoiceOverviewPage() {
                     Variable (usage-based)
                   </span>
                 ) : (
-                  formatCurrency(total)
+                  formatCurrency(total, currency)
                 )}
               </div>
             </div>

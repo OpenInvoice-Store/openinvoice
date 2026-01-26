@@ -33,6 +33,7 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { format } from 'date-fns';
 import { FileText, User, Calendar, DollarSign, Hash } from 'lucide-react';
+import { getInvoiceCurrency } from '@/lib/currency';
 
 function RecurringInvoiceActions({
   template
@@ -392,6 +393,15 @@ export const columns: ColumnDef<RecurringInvoiceTemplate>[] = [
     }) => <DataTableColumnHeader column={column} title='Amount' />,
     cell: ({ row }) => {
       const template = row.original;
+      // Get currency from template or organization default
+      const currency = getInvoiceCurrency(
+        {
+          currency: (template as any).currency,
+          organization: template.organization
+        },
+        template.organization?.defaultCurrency
+      );
+
       if (template.isUsageBased) {
         return (
           <div className='text-right'>
@@ -401,6 +411,7 @@ export const columns: ColumnDef<RecurringInvoiceTemplate>[] = [
                 per {template.usageUnit}
               </div>
             )}
+            <div className='text-muted-foreground mt-1 text-xs'>{currency}</div>
           </div>
         );
       }
@@ -417,7 +428,10 @@ export const columns: ColumnDef<RecurringInvoiceTemplate>[] = [
         );
         const total = subtotal + tax;
         return (
-          <div className='text-right font-medium'>{formatCurrency(total)}</div>
+          <div className='text-right'>
+            <div className='font-medium'>{formatCurrency(total, currency)}</div>
+            <div className='text-muted-foreground text-xs'>{currency}</div>
+          </div>
         );
       } catch {
         return <div className='text-muted-foreground text-right'>-</div>;

@@ -7,6 +7,7 @@ import {
   Font,
   Image
 } from '@react-pdf/renderer';
+import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 
 // Register fonts if needed
 // Font.register({
@@ -123,6 +124,7 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
   const secondaryColor = org.secondaryColor || '#64748b';
   const fontFamily = org.fontFamily || 'Helvetica';
   const footerText = org.footerText || 'Thank you for your business!';
+  const currency = getInvoiceCurrency(invoice, org.defaultCurrency);
 
   // Adjust padding and font sizes based on layout
   const pagePadding =
@@ -296,11 +298,15 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
                 <View key={item.id} style={styles.tableRow}>
                   <Text style={styles.colDescription}>{item.description}</Text>
                   <Text style={styles.colQuantity}>{item.quantity}</Text>
-                  <Text style={styles.colPrice}>${item.price.toFixed(2)}</Text>
+                  <Text style={styles.colPrice}>
+                    {formatCurrencyAmount(item.price, currency)}
+                  </Text>
                   {layout !== 'compact' && (
                     <Text style={styles.colTax}>{item.taxRate}%</Text>
                   )}
-                  <Text style={styles.colTotal}>${itemTotal.toFixed(2)}</Text>
+                  <Text style={styles.colTotal}>
+                    {formatCurrencyAmount(itemTotal, currency)}
+                  </Text>
                 </View>
               );
             })}
@@ -310,25 +316,25 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
         <View style={styles.totals}>
           <View style={styles.totalRow}>
             <Text>Subtotal:</Text>
-            <Text>${invoice.subtotal.toFixed(2)}</Text>
+            <Text>{formatCurrencyAmount(invoice.subtotal, currency)}</Text>
           </View>
           <View style={styles.totalRow}>
             <Text>Tax:</Text>
-            <Text>${invoice.tax.toFixed(2)}</Text>
+            <Text>{formatCurrencyAmount(invoice.tax, currency)}</Text>
           </View>
           <View style={[styles.totalRow, styles.grandTotal]}>
             <Text>Total:</Text>
-            <Text>${invoice.total.toFixed(2)}</Text>
+            <Text>{formatCurrencyAmount(invoice.total, currency)}</Text>
           </View>
           {invoice.totalPaid > 0 && (
             <>
               <View style={styles.totalRow}>
                 <Text>Paid:</Text>
-                <Text>${invoice.totalPaid.toFixed(2)}</Text>
+                <Text>{formatCurrencyAmount(invoice.totalPaid, currency)}</Text>
               </View>
               <View style={[styles.totalRow, { fontWeight: 'bold' }]}>
                 <Text>Balance:</Text>
-                <Text>${invoice.balance.toFixed(2)}</Text>
+                <Text>{formatCurrencyAmount(invoice.balance, currency)}</Text>
               </View>
             </>
           )}
@@ -347,8 +353,9 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
             {invoice.payments.map((payment: any) => (
               <View key={payment.id} style={styles.row}>
                 <Text>
-                  {new Date(payment.date).toLocaleDateString()} - $
-                  {payment.amount.toFixed(2)} ({payment.method})
+                  {new Date(payment.date).toLocaleDateString()} -{' '}
+                  {formatCurrencyAmount(payment.amount, currency)} (
+                  {payment.method})
                 </Text>
               </View>
             ))}

@@ -21,6 +21,11 @@ export async function GET(
       where: { id, organizationId: orgId },
       include: {
         customer: true,
+        organization: {
+          select: {
+            defaultCurrency: true
+          }
+        },
         items: {
           include: {
             product: true
@@ -84,8 +89,16 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, templateId, items } =
-      body;
+    const {
+      customerId,
+      dueDate,
+      issueDate,
+      status,
+      notes,
+      templateId,
+      items,
+      currency
+    } = body;
 
     // Verify customer belongs to the organization if customerId is being updated
     if (customerId && customerId !== existingInvoice.customerId) {
@@ -117,6 +130,7 @@ export async function PUT(
         issueDate: issueDate ? new Date(issueDate) : undefined,
         status,
         notes,
+        currency: currency !== undefined ? currency : undefined,
         templateId: templateId !== undefined ? templateId || null : undefined,
         items: {
           create: items?.map((item: any) => ({

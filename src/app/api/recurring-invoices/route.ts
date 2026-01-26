@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
       daysUntilDue = 30,
       autoSendEmail = true,
       isUsageBased = false,
-      usageUnit
+      usageUnit,
+      currency
     } = body;
 
     // Validation
@@ -154,6 +155,15 @@ export async function POST(request: NextRequest) {
     const nextGenDate = new Date(startDate);
     const endDateObj = endDate ? new Date(endDate) : null;
 
+    // Get organization's default currency if currency not provided
+    let finalCurrency = currency;
+    if (!finalCurrency) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: orgId }
+      });
+      finalCurrency = (organization as any)?.defaultCurrency || 'USD';
+    }
+
     // Create the template
     const template = await prisma.recurringInvoiceTemplate.create({
       data: {
@@ -172,6 +182,7 @@ export async function POST(request: NextRequest) {
         autoSendEmail,
         isUsageBased,
         usageUnit,
+        currency: finalCurrency,
         totalGenerated: 0
       },
       include: {
