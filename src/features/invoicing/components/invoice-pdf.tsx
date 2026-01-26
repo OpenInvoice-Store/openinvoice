@@ -117,34 +117,44 @@ interface InvoicePDFProps {
 
 export function InvoicePDF({ invoice }: InvoicePDFProps) {
   const org = invoice.organization || {};
+  const template = invoice.invoiceTemplate;
+  const layout = template?.layout || 'standard';
   const primaryColor = org.primaryColor || '#2563eb';
   const secondaryColor = org.secondaryColor || '#64748b';
   const fontFamily = org.fontFamily || 'Helvetica';
   const footerText = org.footerText || 'Thank you for your business!';
 
+  // Adjust padding and font sizes based on layout
+  const pagePadding =
+    layout === 'compact' ? 30 : layout === 'detailed' ? 50 : 40;
+  const baseFontSize =
+    layout === 'compact' ? 10 : layout === 'detailed' ? 13 : 12;
+  const titleFontSize =
+    layout === 'compact' ? 18 : layout === 'detailed' ? 28 : 24;
+
   // Create dynamic styles with branding
   const dynamicStyles = StyleSheet.create({
     page: {
-      padding: 40,
-      fontSize: 12,
+      padding: pagePadding,
+      fontSize: baseFontSize,
       fontFamily: fontFamily
     },
     title: {
-      fontSize: 24,
+      fontSize: titleFontSize,
       fontWeight: 'bold',
       marginBottom: 10,
       color: primaryColor
     },
     companyInfo: {
-      marginBottom: 20,
-      fontSize: 10,
+      marginBottom: layout === 'compact' ? 15 : 20,
+      fontSize: baseFontSize - 2,
       color: secondaryColor
     },
     footer: {
-      marginTop: 40,
-      paddingTop: 20,
+      marginTop: layout === 'compact' ? 30 : 40,
+      paddingTop: layout === 'compact' ? 15 : 20,
       borderTop: '1pt solid #e0e0e0',
-      fontSize: 10,
+      fontSize: baseFontSize - 2,
       color: secondaryColor,
       textAlign: 'center'
     }
@@ -227,16 +237,46 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           </View>
         </View>
 
-        <View style={styles.invoiceInfo}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bill To:</Text>
-            <Text>{invoice.customer?.name}</Text>
-            {invoice.customer?.email && <Text>{invoice.customer.email}</Text>}
-            {invoice.customer?.address && (
-              <Text>{invoice.customer.address}</Text>
-            )}
+        {layout === 'detailed' ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              marginBottom: 20
+            }}
+          >
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Bill To:</Text>
+              <Text>{invoice.customer?.name}</Text>
+              {invoice.customer?.email && <Text>{invoice.customer.email}</Text>}
+              {invoice.customer?.address && (
+                <Text>{invoice.customer.address}</Text>
+              )}
+            </View>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Invoice Details:</Text>
+              <Text>Invoice #: {invoice.invoiceNo}</Text>
+              <Text>
+                Issue Date: {new Date(invoice.issueDate).toLocaleDateString()}
+              </Text>
+              <Text>
+                Due Date: {new Date(invoice.dueDate).toLocaleDateString()}
+              </Text>
+              <Text>Status: {invoice.status.toUpperCase()}</Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.invoiceInfo}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Bill To:</Text>
+              <Text>{invoice.customer?.name}</Text>
+              {invoice.customer?.email && <Text>{invoice.customer.email}</Text>}
+              {invoice.customer?.address && (
+                <Text>{invoice.customer.address}</Text>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Items</Text>
@@ -245,7 +285,7 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
               <Text style={styles.colDescription}>Description</Text>
               <Text style={styles.colQuantity}>Qty</Text>
               <Text style={styles.colPrice}>Price</Text>
-              <Text style={styles.colTax}>Tax %</Text>
+              {layout !== 'compact' && <Text style={styles.colTax}>Tax %</Text>}
               <Text style={styles.colTotal}>Total</Text>
             </View>
             {invoice.items.map((item: any) => {
@@ -257,7 +297,9 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
                   <Text style={styles.colDescription}>{item.description}</Text>
                   <Text style={styles.colQuantity}>{item.quantity}</Text>
                   <Text style={styles.colPrice}>${item.price.toFixed(2)}</Text>
-                  <Text style={styles.colTax}>{item.taxRate}%</Text>
+                  {layout !== 'compact' && (
+                    <Text style={styles.colTax}>{item.taxRate}%</Text>
+                  )}
                   <Text style={styles.colTotal}>${itemTotal.toFixed(2)}</Text>
                 </View>
               );
@@ -313,9 +355,15 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
           </View>
         )}
 
-        <View style={dynamicStyles.footer}>
-          <Text>{footerText}</Text>
-        </View>
+        {template?.footerTemplate ? (
+          <View style={dynamicStyles.footer}>
+            <Text>{template.footerTemplate.replace(/<[^>]*>/g, '')}</Text>
+          </View>
+        ) : (
+          <View style={dynamicStyles.footer}>
+            <Text>{footerText}</Text>
+          </View>
+        )}
       </Page>
     </Document>
   );

@@ -48,7 +48,8 @@ export default async function PublicInvoicePage({
           companyWebsite: true,
           footerText: true
         }
-      }
+      },
+      invoiceTemplate: true
     } as any
   });
 

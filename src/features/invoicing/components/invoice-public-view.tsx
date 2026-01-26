@@ -117,92 +117,144 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
   };
 
   const org = invoice.organization || {};
+  const template = (invoice as any).invoiceTemplate;
+  const layout = template?.layout || 'standard';
   const primaryColor = org.primaryColor || '#2563eb';
   const secondaryColor = org.secondaryColor || '#64748b';
   const footerText = org.footerText || 'Thank you for your business!';
+
+  // Parse template styles if available
+  let templateStyles: Record<string, any> = {};
+  if (template?.styles) {
+    try {
+      templateStyles =
+        typeof template.styles === 'string'
+          ? JSON.parse(template.styles)
+          : template.styles;
+    } catch (e) {
+      console.error('Failed to parse template styles:', e);
+    }
+  }
+
+  // Determine container class based on layout
+  const containerClass =
+    layout === 'compact'
+      ? 'max-w-3xl'
+      : layout === 'detailed'
+        ? 'max-w-5xl'
+        : 'max-w-4xl';
 
   return (
     <div
       className='bg-background min-h-screen p-6'
       style={{ fontFamily: org.fontFamily || 'inherit' }}
     >
-      <div className='mx-auto max-w-4xl space-y-6'>
-        {/* Header with Logo and Branding */}
-        <div className='border-b pb-6'>
-          {org.logoUrl && (
-            <div className='mb-4'>
-              <img
-                src={org.logoUrl}
-                alt={org.name || 'Company Logo'}
-                className='h-16 w-auto object-contain'
-              />
-            </div>
-          )}
-          <div className='flex items-center justify-between'>
-            <div>
-              <h1
-                className='text-3xl font-bold'
-                style={{ color: primaryColor }}
-              >
-                Invoice #{invoice.invoiceNo}
-              </h1>
-              <Badge
-                className={`mt-2 ${statusColors[invoice.status] || 'bg-gray-500'}`}
-              >
-                {invoice.status}
-              </Badge>
-            </div>
-            <div className='flex gap-2'>
-              {balance > 0 &&
-                stripeStatus?.connected &&
-                stripeStatus?.status === 'active' && (
-                  <Button
-                    onClick={() => setShowStripePayment(true)}
-                    style={{ backgroundColor: primaryColor }}
-                    className='hover:opacity-90'
-                  >
-                    <IconCurrencyDollar className='mr-2 h-4 w-4' />
-                    {paymentPlanInfo
-                      ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrency(paymentPlanInfo.amountDue)})`
-                      : `Pay Now (${formatCurrency(balance)})`}
-                  </Button>
-                )}
-              <Button
-                variant='outline'
-                onClick={handleDownloadPDF}
-                style={{ borderColor: primaryColor, color: primaryColor }}
-              >
-                <IconDownload className='mr-2 h-4 w-4' /> Download PDF
-              </Button>
+      <div className={`mx-auto ${containerClass} space-y-6`}>
+        {/* Custom Header Template */}
+        {template?.headerTemplate ? (
+          <div
+            className='border-b pb-6'
+            dangerouslySetInnerHTML={{ __html: template.headerTemplate }}
+          />
+        ) : (
+          /* Default Header with Logo and Branding */
+          <div className='border-b pb-6'>
+            {org.logoUrl && (
+              <div className='mb-4'>
+                <img
+                  src={org.logoUrl}
+                  alt={org.name || 'Company Logo'}
+                  className='h-16 w-auto object-contain'
+                />
+              </div>
+            )}
+            <div className='flex items-center justify-between'>
+              <div>
+                <h1
+                  className={
+                    layout === 'compact'
+                      ? 'text-2xl font-bold'
+                      : 'text-3xl font-bold'
+                  }
+                  style={{ color: primaryColor }}
+                >
+                  Invoice #{invoice.invoiceNo}
+                </h1>
+                <Badge
+                  className={`mt-2 ${statusColors[invoice.status] || 'bg-gray-500'}`}
+                >
+                  {invoice.status}
+                </Badge>
+              </div>
+              <div className='flex gap-2'>
+                {balance > 0 &&
+                  stripeStatus?.connected &&
+                  stripeStatus?.status === 'active' && (
+                    <Button
+                      onClick={() => setShowStripePayment(true)}
+                      style={{ backgroundColor: primaryColor }}
+                      className='hover:opacity-90'
+                    >
+                      <IconCurrencyDollar className='mr-2 h-4 w-4' />
+                      {paymentPlanInfo
+                        ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrency(paymentPlanInfo.amountDue)})`
+                        : `Pay Now (${formatCurrency(balance)})`}
+                    </Button>
+                  )}
+                <Button
+                  variant='outline'
+                  onClick={handleDownloadPDF}
+                  style={{ borderColor: primaryColor, color: primaryColor }}
+                >
+                  <IconDownload className='mr-2 h-4 w-4' /> Download PDF
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Company Information */}
-        {org.name && (
-          <Card className='bg-muted/30'>
-            <CardContent className='pt-6'>
-              <div className='space-y-2 text-sm'>
-                <p className='text-sm font-semibold'>{org.name}</p>
+        {/* Company Information - Only show if not using custom header */}
+        {!template?.headerTemplate && org.name && (
+          <Card
+            className={layout === 'compact' ? 'bg-muted/20' : 'bg-muted/30'}
+          >
+            <CardContent className={layout === 'compact' ? 'pt-4' : 'pt-6'}>
+              <div
+                className={`space-y-2 ${layout === 'compact' ? 'text-xs' : 'text-sm'}`}
+              >
+                <p
+                  className={`${layout === 'compact' ? 'text-xs' : 'text-sm'} font-semibold`}
+                >
+                  {org.name}
+                </p>
                 {org.companyAddress && (
-                  <p className='text-sm' style={{ color: secondaryColor }}>
+                  <p
+                    className={layout === 'compact' ? 'text-xs' : 'text-sm'}
+                    style={{ color: secondaryColor }}
+                  >
                     {org.companyAddress}
                   </p>
                 )}
                 <div className='flex gap-4'>
                   {org.companyPhone && (
-                    <p className='text-sm' style={{ color: secondaryColor }}>
+                    <p
+                      className={layout === 'compact' ? 'text-xs' : 'text-sm'}
+                      style={{ color: secondaryColor }}
+                    >
                       {org.companyPhone}
                     </p>
                   )}
                   {org.companyEmail && (
-                    <p className='text-sm' style={{ color: secondaryColor }}>
+                    <p
+                      className={layout === 'compact' ? 'text-xs' : 'text-sm'}
+                      style={{ color: secondaryColor }}
+                    >
                       {org.companyEmail}
                     </p>
                   )}
                 </div>
                 {org.companyWebsite && (
-                  <p className='text-sm'>
+                  <p className={layout === 'compact' ? 'text-xs' : 'text-sm'}>
                     <a
                       href={org.companyWebsite}
                       target='_blank'
@@ -219,60 +271,167 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
           </Card>
         )}
 
-        <div className='grid grid-cols-2 gap-4'>
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Information</CardTitle>
-            </CardHeader>
-            <CardContent className='space-y-1'>
-              <p className='text-sm font-semibold'>{invoice.customer?.name}</p>
+        {/* Customer and Invoice Details - Layout varies by template */}
+        {layout === 'detailed' ? (
+          <div className='grid grid-cols-3 gap-4'>
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-base'>
+                  Customer Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className='space-y-1'>
+                <p className='text-sm font-semibold'>
+                  {invoice.customer?.name}
+                </p>
+                {invoice.customer?.email && (
+                  <p className='text-muted-foreground text-sm'>
+                    {invoice.customer.email}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-base'>Invoice Details</CardTitle>
+              </CardHeader>
+              <CardContent className='space-y-1'>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Issue Date:</span>
+                  <span>{formatDate(invoice.issueDate)}</span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Due Date:</span>
+                  <span>{formatDate(invoice.dueDate)}</span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Invoice #:</span>
+                  <span>{invoice.invoiceNo}</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-base'>Payment Status</CardTitle>
+              </CardHeader>
+              <CardContent className='space-y-1'>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Status:</span>
+                  <Badge
+                    className={statusColors[invoice.status] || 'bg-gray-500'}
+                  >
+                    {invoice.status}
+                  </Badge>
+                </div>
+                {totalPaid > 0 && (
+                  <div className='flex justify-between text-sm'>
+                    <span className='text-muted-foreground'>Paid:</span>
+                    <span className='text-green-600'>
+                      {formatCurrency(totalPaid)}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : layout === 'compact' ? (
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='rounded-md border p-3'>
+              <p className='mb-1 text-xs font-semibold'>Customer</p>
+              <p className='text-xs'>{invoice.customer?.name}</p>
               {invoice.customer?.email && (
-                <p className='text-muted-foreground text-sm'>
+                <p className='text-muted-foreground text-xs'>
                   {invoice.customer.email}
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoice Details</CardTitle>
-            </CardHeader>
-            <CardContent className='space-y-1'>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Issue Date:</span>
-                <span>{formatDate(invoice.issueDate)}</span>
+            </div>
+            <div className='rounded-md border p-3'>
+              <p className='mb-1 text-xs font-semibold'>Invoice Details</p>
+              <div className='space-y-0.5 text-xs'>
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Issue:</span>
+                  <span>{formatDate(invoice.issueDate)}</span>
+                </div>
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Due:</span>
+                  <span>{formatDate(invoice.dueDate)}</span>
+                </div>
               </div>
-              <div className='flex justify-between text-sm'>
-                <span className='text-muted-foreground'>Due Date:</span>
-                <span>{formatDate(invoice.dueDate)}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
+        ) : (
+          <div className='grid grid-cols-2 gap-4'>
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Information</CardTitle>
+              </CardHeader>
+              <CardContent className='space-y-1'>
+                <p className='text-sm font-semibold'>
+                  {invoice.customer?.name}
+                </p>
+                {invoice.customer?.email && (
+                  <p className='text-muted-foreground text-sm'>
+                    {invoice.customer.email}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Invoice Details</CardTitle>
+              </CardHeader>
+              <CardContent className='space-y-1'>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Issue Date:</span>
+                  <span>{formatDate(invoice.issueDate)}</span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground'>Due Date:</span>
+                  <span>{formatDate(invoice.dueDate)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
-            <CardTitle>Items</CardTitle>
+            <CardTitle className={layout === 'compact' ? 'text-base' : ''}>
+              Items
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className='rounded-md border'>
-              <table className='w-full text-sm'>
+              <table
+                className={`w-full ${layout === 'compact' ? 'text-xs' : 'text-sm'}`}
+              >
                 <thead>
                   <tr className='border-b'>
-                    <th className='text-muted-foreground p-2 text-left font-medium'>
+                    <th
+                      className={`text-muted-foreground ${layout === 'compact' ? 'p-1.5' : 'p-2'} text-left font-medium`}
+                    >
                       Description
                     </th>
-                    <th className='text-muted-foreground p-2 text-right font-medium'>
+                    <th
+                      className={`text-muted-foreground ${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right font-medium`}
+                    >
                       Quantity
                     </th>
-                    <th className='text-muted-foreground p-2 text-right font-medium'>
+                    <th
+                      className={`text-muted-foreground ${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right font-medium`}
+                    >
                       Price
                     </th>
-                    <th className='text-muted-foreground p-2 text-right font-medium'>
-                      Tax
-                    </th>
-                    <th className='text-muted-foreground p-2 text-right font-medium'>
+                    {layout !== 'compact' && (
+                      <th
+                        className={`text-muted-foreground p-2 text-right font-medium`}
+                      >
+                        Tax
+                      </th>
+                    )}
+                    <th
+                      className={`text-muted-foreground ${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right font-medium`}
+                    >
                       Total
                     </th>
                   </tr>
@@ -284,13 +443,25 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                     const itemTotal = itemSubtotal + itemTax;
                     return (
                       <tr key={item.id} className='border-b'>
-                        <td className='p-2'>{item.description}</td>
-                        <td className='p-2 text-right'>{item.quantity}</td>
-                        <td className='p-2 text-right'>
+                        <td className={layout === 'compact' ? 'p-1.5' : 'p-2'}>
+                          {item.description}
+                        </td>
+                        <td
+                          className={`${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right`}
+                        >
+                          {item.quantity}
+                        </td>
+                        <td
+                          className={`${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right`}
+                        >
                           {formatCurrency(item.price)}
                         </td>
-                        <td className='p-2 text-right'>{item.taxRate}%</td>
-                        <td className='p-2 text-right'>
+                        {layout !== 'compact' && (
+                          <td className='p-2 text-right'>{item.taxRate}%</td>
+                        )}
+                        <td
+                          className={`${layout === 'compact' ? 'p-1.5' : 'p-2'} text-right`}
+                        >
                           {formatCurrency(itemTotal)}
                         </td>
                       </tr>
@@ -300,7 +471,9 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
               </table>
             </div>
 
-            <div className='mt-4 ml-auto w-64 space-y-2 text-sm'>
+            <div
+              className={`mt-4 ml-auto ${layout === 'compact' ? 'w-48 space-y-1 text-xs' : layout === 'detailed' ? 'w-80 space-y-2 text-sm' : 'w-64 space-y-2 text-sm'}`}
+            >
               <div className='flex justify-between'>
                 <span className='text-muted-foreground'>Subtotal:</span>
                 <span>{formatCurrency(subtotal)}</span>
@@ -310,7 +483,7 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                 <span>{formatCurrency(tax)}</span>
               </div>
               <div
-                className='flex justify-between border-t pt-2 font-semibold'
+                className={`flex justify-between border-t ${layout === 'compact' ? 'pt-1' : 'pt-2'} font-semibold`}
                 style={{ borderColor: primaryColor }}
               >
                 <span style={{ color: primaryColor }}>Total:</span>
@@ -423,16 +596,28 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
           </Card>
         )}
 
-        {/* Footer with Branding */}
-        {footerText && (
+        {/* Custom Footer Template */}
+        {template?.footerTemplate ? (
           <div
-            className='border-t pt-6 text-center'
+            className='border-t pt-6'
             style={{ borderColor: secondaryColor }}
-          >
-            <p className='text-sm' style={{ color: secondaryColor }}>
-              {footerText}
-            </p>
-          </div>
+            dangerouslySetInnerHTML={{ __html: template.footerTemplate }}
+          />
+        ) : (
+          /* Default Footer with Branding */
+          footerText && (
+            <div
+              className={`border-t ${layout === 'compact' ? 'pt-4' : 'pt-6'} text-center`}
+              style={{ borderColor: secondaryColor }}
+            >
+              <p
+                className={layout === 'compact' ? 'text-xs' : 'text-sm'}
+                style={{ color: secondaryColor }}
+              >
+                {footerText}
+              </p>
+            </div>
+          )
         )}
 
         {/* Stripe Payment Dialog */}

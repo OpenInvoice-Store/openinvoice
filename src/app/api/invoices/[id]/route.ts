@@ -36,7 +36,8 @@ export async function GET(
               orderBy: { installmentNumber: 'asc' }
             }
           }
-        }
+        },
+        invoiceTemplate: true
       }
     });
 
@@ -83,7 +84,8 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, items } = body;
+    const { customerId, dueDate, issueDate, status, notes, templateId, items } =
+      body;
 
     // Verify customer belongs to the organization if customerId is being updated
     if (customerId && customerId !== existingInvoice.customerId) {
@@ -115,6 +117,7 @@ export async function PUT(
         issueDate: issueDate ? new Date(issueDate) : undefined,
         status,
         notes,
+        templateId: templateId !== undefined ? templateId || null : undefined,
         items: {
           create: items?.map((item: any) => ({
             productId: item.productId,
@@ -132,7 +135,8 @@ export async function PUT(
             product: true
           }
         },
-        payments: true
+        payments: true,
+        invoiceTemplate: true
       }
     });
 

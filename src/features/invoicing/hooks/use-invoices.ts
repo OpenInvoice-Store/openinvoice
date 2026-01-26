@@ -86,6 +86,7 @@ export function useCreateInvoice() {
       issueDate?: string;
       status?: string;
       notes?: string;
+      templateId?: string | null;
       items: Array<{
         productId: string;
         description: string;
@@ -116,6 +117,7 @@ export function useUpdateInvoice() {
       ...data
     }: Partial<Invoice> & {
       id: string;
+      templateId?: string | null;
       items?: Array<{
         productId: string;
         description: string;

@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, items } = body;
+    const { customerId, dueDate, issueDate, status, notes, templateId, items } =
+      body;
 
     if (!customerId || !dueDate || !items || items.length === 0) {
       return NextResponse.json(
@@ -80,6 +81,19 @@ export async function POST(request: NextRequest) {
         { error: 'Customer not found or does not belong to your organization' },
         { status: 404 }
       );
+    }
+
+    // Get default template if templateId not provided (before transaction)
+    let finalTemplateId = templateId;
+    if (!finalTemplateId) {
+      const defaultTemplate = await (prisma as any).invoiceTemplate.findFirst({
+        where: {
+          organizationId: orgId,
+          isDefault: true,
+          isActive: true
+        }
+      });
+      finalTemplateId = defaultTemplate?.id || null;
     }
 
     // Create invoice with atomic counter increment
@@ -103,6 +117,7 @@ export async function POST(request: NextRequest) {
             issueDate: issueDate ? new Date(issueDate) : new Date(),
             status: status || 'draft',
             notes,
+            ...(finalTemplateId && { templateId: finalTemplateId }),
             items: {
               create: items.map((item: any) => ({
                 productId: item.productId,
