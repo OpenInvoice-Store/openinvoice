@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
         dueDate.setDate(dueDate.getDate() + template.daysUntilDue);
 
         // Calculate billing period for usage-based invoices
-        let billingPeriodStart: Date;
+        let billingPeriodStart: Date = issueDate; // Default value
         let billingPeriodEnd: Date = issueDate;
 
         if (template.isUsageBased) {
