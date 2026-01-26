@@ -1,6 +1,4 @@
 'use client';
-
-import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -19,6 +17,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { IconUsers, IconTrendingUp, IconAward } from '@tabler/icons-react';
+import { useCustomerLifetimeValue } from '../hooks/use-analytics';
 
 interface CLVMetrics {
   totalRevenue: number;
@@ -58,22 +57,8 @@ interface CLVSummary {
   lowValueCount: number;
 }
 
-async function fetchCLV() {
-  const response = await fetch('/api/analytics/clv');
-  if (!response.ok) {
-    throw new Error('Failed to fetch CLV data');
-  }
-  return response.json();
-}
-
 export function CustomerLifetimeValue() {
-  const { data, isLoading, error } = useQuery<{
-    customers: CustomerCLV[];
-    summary: CLVSummary;
-  }>({
-    queryKey: ['clv'],
-    queryFn: fetchCLV
-  });
+  const { data, isLoading, error } = useCustomerLifetimeValue();
 
   if (error) {
     return (

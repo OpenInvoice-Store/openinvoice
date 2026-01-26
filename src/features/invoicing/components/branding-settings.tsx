@@ -22,10 +22,13 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { IconUpload, IconX } from '@tabler/icons-react';
+import {
+  useBrandingSettings,
+  useUpdateBrandingSettings,
+  useUploadBrandingLogo
+} from '../hooks/use-branding';
 
 const brandingSchema = z.object({
   logoUrl: z.string().url().optional().nullable().or(z.literal('')),
@@ -62,18 +65,11 @@ const brandingSchema = z.object({
 type BrandingFormData = z.infer<typeof brandingSchema>;
 
 export function BrandingSettings() {
-  const queryClient = useQueryClient();
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  // Fetch branding settings
-  const { data: branding, isLoading } = useQuery<BrandingFormData>({
-    queryKey: ['branding-settings'],
-    queryFn: async () => {
-      const res = await fetch('/api/organizations/branding');
-      if (!res.ok) throw new Error('Failed to fetch branding settings');
-      return res.json();
-    }
-  });
+  const { data: branding, isLoading } = useBrandingSettings();
+  const updateBranding = useUpdateBrandingSettings();
+  const uploadLogo = useUploadBrandingLogo();
 
   const form = useForm<BrandingFormData>({
     resolver: zodResolver(brandingSchema),
@@ -107,51 +103,16 @@ export function BrandingSettings() {
     }
   }, [branding, form]);
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: BrandingFormData) => {
-      const res = await fetch('/api/organizations/branding', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to update branding');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Branding settings updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['branding-settings'] });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update branding settings');
-    }
-  });
-
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingLogo(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload logo');
-      }
-
-      const data = await response.json();
+      const data = await uploadLogo.mutateAsync(file);
       form.setValue('logoUrl', data.url);
-      toast.success('Logo uploaded successfully');
     } catch (error) {
-      toast.error('Failed to upload logo');
+      // Error is handled by the hook
       console.error('Error uploading logo:', error);
     } finally {
       setUploadingLogo(false);
@@ -166,7 +127,7 @@ export function BrandingSettings() {
         value === '' ? null : value
       ])
     ) as BrandingFormData;
-    updateMutation.mutate(cleanedData);
+    updateBranding.mutate(cleanedData);
   };
 
   if (isLoading) {
@@ -224,7 +185,7 @@ export function BrandingSettings() {
                       type='file'
                       accept='image/*'
                       onChange={handleLogoUpload}
-                      disabled={uploadingLogo}
+                      disabled={uploadingLogo || uploadLogo.isPending}
                       className='hidden'
                       id='logo-upload'
                     />
@@ -234,10 +195,12 @@ export function BrandingSettings() {
                       onClick={() =>
                         document.getElementById('logo-upload')?.click()
                       }
-                      disabled={uploadingLogo}
+                      disabled={uploadingLogo || uploadLogo.isPending}
                     >
                       <IconUpload className='mr-2 h-4 w-4' />
-                      {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                      {uploadingLogo || uploadLogo.isPending
+                        ? 'Uploading...'
+                        : 'Upload Logo'}
                     </Button>
                     <FormDescription>
                       Upload your company logo (PNG, JPG, or SVG). Recommended
@@ -512,8 +475,8 @@ export function BrandingSettings() {
           </div>
 
           <div className='flex justify-end'>
-            <Button type='submit' disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving...' : 'Save Branding'}
+            <Button type='submit' disabled={updateBranding.isPending}>
+              {updateBranding.isPending ? 'Saving...' : 'Save Branding'}
             </Button>
           </div>
         </Form>

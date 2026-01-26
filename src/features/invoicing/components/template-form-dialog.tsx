@@ -30,9 +30,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import { useMutation } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { useEffect } from 'react';
+import {
+  useCreateInvoiceTemplate,
+  useUpdateInvoiceTemplate
+} from '../hooks/use-templates';
 
 const templateSchema = z.object({
   name: z.string().min(1, 'Template name is required'),
@@ -98,49 +100,37 @@ export function TemplateFormDialog({
     }
   }, [template, form]);
 
-  const createMutation = useMutation({
-    mutationFn: async (data: TemplateFormData) => {
-      const res = await fetch('/api/invoice-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to create template');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Template created successfully');
-      onSuccess?.();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create template');
-    }
-  });
+  const createTemplate = useCreateInvoiceTemplate();
+  const updateTemplate = useUpdateInvoiceTemplate();
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: TemplateFormData) => {
-      const res = await fetch(`/api/invoice-templates/${template!.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+  const createMutation = {
+    mutate: (data: TemplateFormData) => {
+      createTemplate.mutate(data, {
+        onSuccess: () => {
+          onSuccess?.();
+        }
       });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to update template');
-      }
-      return res.json();
     },
-    onSuccess: () => {
-      toast.success('Template updated successfully');
-      onSuccess?.();
+    isPending: createTemplate.isPending
+  };
+
+  const updateMutation = {
+    mutate: (data: TemplateFormData) => {
+      if (!template) return;
+      updateTemplate.mutate(
+        {
+          id: template.id,
+          ...data
+        },
+        {
+          onSuccess: () => {
+            onSuccess?.();
+          }
+        }
+      );
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update template');
-    }
-  });
+    isPending: updateTemplate.isPending
+  };
 
   const onSubmit = (data: TemplateFormData) => {
     if (template) {

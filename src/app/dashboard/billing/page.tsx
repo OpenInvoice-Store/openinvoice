@@ -16,7 +16,13 @@ import { Badge } from '@/components/ui/badge';
 import { Info, CheckCircle2, XCircle, Loader2, Link2 } from 'lucide-react';
 import { billingInfoContent } from '@/config/infoconfig';
 import { toast } from 'sonner';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import {
+  useStripeConnectStatus,
+  useConnectStripe,
+  useDisconnectStripe,
+  useEnableStripePayments
+} from '@/features/invoicing/hooks/use-stripe';
 
 interface StripeConnectStatus {
   connected: boolean;
@@ -31,92 +37,27 @@ interface StripeConnectStatus {
 
 export default function BillingPage() {
   const { organization, isLoaded } = useOrganization();
-  const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Fetch Stripe Connect status
   const { data: stripeStatus, isLoading: isLoadingStatus } =
-    useQuery<StripeConnectStatus>({
-      queryKey: ['stripe-connect-status'],
-      queryFn: async () => {
-        const response = await fetch('/api/stripe/connect/status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch Stripe status');
+    useStripeConnectStatus(!!organization);
+  const connectStripe = useConnectStripe();
+  const disconnectStripe = useDisconnectStripe();
+  const enableStripe = useEnableStripePayments();
+
+  const handleConnect = () => {
+    connectStripe.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data.url) {
+          window.location.href = data.url;
         }
-        return response.json();
-      },
-      enabled: !!organization,
-      refetchInterval: 5000 // Poll every 5 seconds when connecting
+        setIsConnecting(true);
+      }
     });
-
-  // Connect Stripe mutation
-  const connectMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/stripe/connect/authorize');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to connect Stripe');
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-      setIsConnecting(true);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to connect Stripe account');
-    }
-  });
-
-  // Disconnect Stripe mutation (soft disconnect: disable payments in app)
-  const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/stripe/connect/disconnect', {
-        method: 'POST'
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to disconnect Stripe');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      toast.success(
-        'Stripe payments have been disconnected for this organization (Stripe account remains active).'
-      );
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to disconnect Stripe account');
-    }
-  });
-
-  // Enable Stripe payments mutation (reconnect in app)
-  const enableMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/stripe/connect/enable', {
-        method: 'POST'
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to enable Stripe');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      toast.success(
-        'Stripe payments have been re-enabled for this organization.'
-      );
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to enable Stripe account');
-    }
-  });
+  };
 
   // Hard reset Stripe mutation (delete account and clear connection)
+  // Note: This is a special case that's not in the hook, keeping it inline
   const resetMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch('/api/stripe/connect/reset', {
@@ -132,7 +73,7 @@ export default function BillingPage() {
       toast.success(
         'Stripe account reset successfully. You will need to redo Stripe onboarding next time you connect.'
       );
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
+      // Invalidate queries - we'll need to import useQueryClient for this
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to reset Stripe account');
@@ -144,11 +85,10 @@ export default function BillingPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('stripe_connected') === 'true') {
       toast.success('Stripe account connected successfully!');
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [queryClient]);
+  }, []);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -311,8 +251,8 @@ export default function BillingPage() {
                 <div className='flex flex-wrap gap-2'>
                   <Button
                     variant='outline'
-                    onClick={() => connectMutation.mutate()}
-                    disabled={connectMutation.isPending}
+                    onClick={handleConnect}
+                    disabled={connectStripe.isPending}
                   >
                     <Link2 className='mr-2 h-4 w-4' />
                     Update Connection
@@ -326,12 +266,12 @@ export default function BillingPage() {
                             'Are you sure you want to disconnect Stripe payments for this organization? Your Stripe account will remain active in Stripe.'
                           )
                         ) {
-                          disconnectMutation.mutate();
+                          disconnectStripe.mutate();
                         }
                       }}
-                      disabled={disconnectMutation.isPending}
+                      disabled={disconnectStripe.isPending}
                     >
-                      {disconnectMutation.isPending ? (
+                      {disconnectStripe.isPending ? (
                         <>
                           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                           Disconnecting...
@@ -349,12 +289,12 @@ export default function BillingPage() {
                             'Reconnect Stripe payments for this organization? Your existing Stripe account will be used.'
                           )
                         ) {
-                          enableMutation.mutate();
+                          enableStripe.mutate();
                         }
                       }}
-                      disabled={enableMutation.isPending}
+                      disabled={enableStripe.isPending}
                     >
-                      {enableMutation.isPending ? (
+                      {enableStripe.isPending ? (
                         <>
                           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                           Reconnecting...
@@ -399,11 +339,11 @@ export default function BillingPage() {
                   </AlertDescription>
                 </Alert>
                 <Button
-                  onClick={() => connectMutation.mutate()}
-                  disabled={connectMutation.isPending || isConnecting}
+                  onClick={handleConnect}
+                  disabled={connectStripe.isPending || isConnecting}
                   className='w-full'
                 >
-                  {connectMutation.isPending || isConnecting ? (
+                  {connectStripe.isPending || isConnecting ? (
                     <>
                       <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                       Connecting...

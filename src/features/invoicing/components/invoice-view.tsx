@@ -24,7 +24,13 @@ import { StripePaymentForm } from './stripe-payment-form';
 import { PaymentPlanSection } from './payment-plan-section';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import {
+  useInvoiceEmailLogs,
+  useGenerateShareLink,
+  useSendInvoiceEmail,
+  useSendInvoiceReminder
+} from '../hooks/use-invoice-actions';
+import { useStripeConnectStatus } from '../hooks/use-stripe';
 import {
   Dialog,
   DialogContent,
@@ -49,31 +55,14 @@ export function InvoiceView() {
   const invoiceQuery = useInvoice(id);
   const { data: invoice, isLoading } = invoiceQuery;
   const [showStripePayment, setShowStripePayment] = useState(false);
-  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [isSendingReminder, setIsSendingReminder] = useState(false);
   const [activeSection, setActiveSection] = useState<InvoiceSection>('details');
 
-  // Check Stripe Connect status
-  const { data: stripeStatus } = useQuery({
-    queryKey: ['stripe-connect-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/stripe/connect/status');
-      if (!response.ok) return null;
-      return response.json();
-    }
-  });
-
-  // Fetch email logs
-  const { data: emailLogs = [], refetch: refetchEmailLogs } = useQuery({
-    queryKey: ['emailLogs', id],
-    queryFn: async () => {
-      const res = await fetch(`/api/invoices/${id}/email-logs`);
-      if (!res.ok) throw new Error('Failed to fetch email logs');
-      return res.json();
-    },
-    enabled: !!id
-  });
+  const { data: stripeStatus } = useStripeConnectStatus();
+  const { data: emailLogs = [], refetch: refetchEmailLogs } =
+    useInvoiceEmailLogs(id);
+  const generateShareLink = useGenerateShareLink();
+  const sendEmail = useSendInvoiceEmail();
+  const sendReminder = useSendInvoiceReminder();
 
   const handleDownloadPDF = () => {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
@@ -81,23 +70,10 @@ export function InvoiceView() {
 
   const handleShareLink = async () => {
     try {
-      setIsGeneratingLink(true);
-      const response = await fetch(`/api/invoices/${id}/share`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate share link');
-      }
-
-      const { shareUrl } = await response.json();
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Shareable link copied to clipboard!');
+      await generateShareLink.mutateAsync(id);
     } catch (error) {
-      toast.error('Failed to generate share link');
+      // Error is handled by the hook
       console.error('Error generating share link:', error);
-    } finally {
-      setIsGeneratingLink(false);
     }
   };
 
@@ -108,27 +84,12 @@ export function InvoiceView() {
     }
 
     try {
-      setIsSendingEmail(true);
-      const response = await fetch(`/api/invoices/${id}/send-email`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send email');
-      }
-
-      toast.success('Invoice email sent successfully!');
-      // Refetch invoice and email logs to get updated data
+      await sendEmail.mutateAsync(id);
       invoiceQuery.refetch();
       refetchEmailLogs();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to send email'
-      );
+      // Error is handled by the hook
       console.error('Error sending email:', error);
-    } finally {
-      setIsSendingEmail(false);
     }
   };
 
@@ -144,28 +105,12 @@ export function InvoiceView() {
     }
 
     try {
-      setIsSendingReminder(true);
-      const response = await fetch(`/api/invoices/${id}/send-reminder`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send reminder');
-      }
-
-      const data = await response.json();
-      toast.success('Payment reminder sent successfully!');
-      // Refetch invoice and email logs to get updated data
+      await sendReminder.mutateAsync(id);
       invoiceQuery.refetch();
       refetchEmailLogs();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to send reminder'
-      );
+      // Error is handled by the hook
       console.error('Error sending reminder:', error);
-    } finally {
-      setIsSendingReminder(false);
     }
   };
 
@@ -219,19 +164,19 @@ export function InvoiceView() {
               <Button
                 variant='default'
                 onClick={handleSendEmail}
-                disabled={isSendingEmail}
+                disabled={sendEmail.isPending}
               >
                 <IconMail className='mr-2 h-4 w-4' />
-                {isSendingEmail ? 'Sending...' : 'Send Email'}
+                {sendEmail.isPending ? 'Sending...' : 'Send Email'}
               </Button>
               {invoice.status !== 'paid' && (
                 <Button
                   variant='outline'
                   onClick={handleSendReminder}
-                  disabled={isSendingReminder}
+                  disabled={sendReminder.isPending}
                 >
                   <IconBell className='mr-2 h-4 w-4' />
-                  {isSendingReminder ? 'Sending...' : 'Send Reminder'}
+                  {sendReminder.isPending ? 'Sending...' : 'Send Reminder'}
                 </Button>
               )}
             </>
@@ -239,10 +184,10 @@ export function InvoiceView() {
           <Button
             variant='outline'
             onClick={handleShareLink}
-            disabled={isGeneratingLink}
+            disabled={generateShareLink.isPending}
           >
             <IconLink className='mr-2 h-4 w-4' />
-            {isGeneratingLink ? 'Generating...' : 'Share Link'}
+            {generateShareLink.isPending ? 'Generating...' : 'Share Link'}
           </Button>
           <Button variant='outline' onClick={handleDownloadPDF}>
             <IconDownload className='mr-2 h-4 w-4' /> Download PDF

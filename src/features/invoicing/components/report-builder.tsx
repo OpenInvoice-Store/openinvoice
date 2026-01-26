@@ -35,9 +35,12 @@ import {
   IconFile,
   IconFileSpreadsheet
 } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
 import { useCustomers } from '../hooks/use-customers';
-import { toast } from 'sonner';
+import {
+  useGenerateReport,
+  useExportReport,
+  type ReportParams
+} from '../hooks/use-reports';
 import { ReportResults } from './report-results';
 
 const reportSchema = z.object({
@@ -70,10 +73,52 @@ const reportSchema = z.object({
 
 type ReportFormData = z.infer<typeof reportSchema>;
 
+// Helper function to calculate date range
+function calculateDateRange(
+  dateRange: string,
+  startDate?: string,
+  endDate?: string
+): { startDate?: string; endDate?: string } {
+  let calculatedStartDate: Date | undefined;
+  let calculatedEndDate: Date | undefined;
+
+  if (dateRange === 'custom') {
+    if (startDate) calculatedStartDate = new Date(startDate);
+    if (endDate) calculatedEndDate = new Date(endDate);
+  } else if (dateRange !== 'all') {
+    calculatedEndDate = new Date();
+    calculatedStartDate = new Date();
+
+    switch (dateRange) {
+      case 'today':
+        calculatedStartDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        calculatedStartDate.setDate(calculatedStartDate.getDate() - 7);
+        break;
+      case 'month':
+        calculatedStartDate.setMonth(calculatedStartDate.getMonth() - 1);
+        break;
+      case 'quarter':
+        calculatedStartDate.setMonth(calculatedStartDate.getMonth() - 3);
+        break;
+      case 'year':
+        calculatedStartDate.setFullYear(calculatedStartDate.getFullYear() - 1);
+        break;
+    }
+  }
+
+  return {
+    startDate: calculatedStartDate?.toISOString(),
+    endDate: calculatedEndDate?.toISOString()
+  };
+}
+
 export function ReportBuilder() {
   const [reportData, setReportData] = useState<any>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const { data: customers } = useCustomers();
+  const generateReport = useGenerateReport();
+  const exportReport = useExportReport();
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportSchema),
@@ -90,145 +135,75 @@ export function ReportBuilder() {
   const reportType = form.watch('reportType');
 
   const onSubmit = async (data: ReportFormData) => {
-    setIsGenerating(true);
     try {
-      // Calculate date range
-      let startDate: Date | undefined;
-      let endDate: Date | undefined;
-
-      if (data.dateRange === 'custom') {
-        if (data.startDate) startDate = new Date(data.startDate);
-        if (data.endDate) endDate = new Date(data.endDate);
-      } else if (data.dateRange !== 'all') {
-        endDate = new Date();
-        startDate = new Date();
-
-        switch (data.dateRange) {
-          case 'today':
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case 'week':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'month':
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-          case 'quarter':
-            startDate.setMonth(startDate.getMonth() - 3);
-            break;
-          case 'year':
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            break;
-        }
-      }
-
-      const params = new URLSearchParams({
-        reportType: data.reportType,
-        ...(startDate && { startDate: startDate.toISOString() }),
-        ...(endDate && { endDate: endDate.toISOString() }),
-        ...(data.status && { status: data.status }),
-        ...(data.customerId && { customerId: data.customerId }),
-        ...(data.groupBy && { groupBy: data.groupBy }),
-        includeItems: String(data.includeItems),
-        includePayments: String(data.includePayments)
-      });
-
-      const response = await fetch(`/api/reports?${params.toString()}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate report');
-      }
-
-      const result = await response.json();
-      setReportData(result);
-      toast.success('Report generated successfully');
-    } catch (error) {
-      console.error('Report generation error:', error);
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to generate report'
+      const { startDate, endDate } = calculateDateRange(
+        data.dateRange,
+        data.startDate,
+        data.endDate
       );
-    } finally {
-      setIsGenerating(false);
+
+      const params: ReportParams = {
+        reportType: data.reportType,
+        startDate,
+        endDate,
+        status: data.status,
+        customerId: data.customerId,
+        groupBy: data.groupBy || 'none',
+        includeItems: data.includeItems,
+        includePayments: data.includePayments
+      };
+
+      const result = await generateReport.mutateAsync(params);
+      setReportData(result);
+    } catch (error) {
+      // Error is handled by the hook
+      console.error('Report generation error:', error);
     }
   };
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     if (!reportData) {
-      toast.error('Please generate a report first');
       return;
     }
 
     try {
       const formData = form.getValues();
-      const params = new URLSearchParams({
-        format,
+      const { startDate, endDate } = calculateDateRange(
+        formData.dateRange,
+        formData.startDate,
+        formData.endDate
+      );
+
+      const params: ReportParams = {
         reportType: formData.reportType,
-        ...(formData.status && { status: formData.status }),
-        ...(formData.customerId && { customerId: formData.customerId }),
-        ...(formData.groupBy && { groupBy: formData.groupBy }),
-        includeItems: String(formData.includeItems),
-        includePayments: String(formData.includePayments)
-      });
+        startDate,
+        endDate,
+        status: formData.status,
+        customerId: formData.customerId,
+        groupBy: formData.groupBy || 'none',
+        includeItems: formData.includeItems,
+        includePayments: formData.includePayments
+      };
 
-      // Add date range
-      let startDate: Date | undefined;
-      let endDate: Date | undefined;
+      const blob = await exportReport.mutateAsync({ params, format });
 
-      if (formData.dateRange === 'custom') {
-        if (formData.startDate) startDate = new Date(formData.startDate);
-        if (formData.endDate) endDate = new Date(formData.endDate);
-      } else if (formData.dateRange !== 'all') {
-        endDate = new Date();
-        startDate = new Date();
-
-        switch (formData.dateRange) {
-          case 'today':
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case 'week':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'month':
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-          case 'quarter':
-            startDate.setMonth(startDate.getMonth() - 3);
-            break;
-          case 'year':
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            break;
-        }
-      }
-
-      if (startDate) params.append('startDate', startDate.toISOString());
-      if (endDate) params.append('endDate', endDate.toISOString());
-
-      const response = await fetch(`/api/reports/export?${params.toString()}`);
-      if (!response.ok) throw new Error('Export failed');
-
-      const blob = await response.blob();
+      // Download the blob
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
 
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `report-${new Date().toISOString().split('T')[0]}`;
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="(.+)"/);
-        if (match) filename = match[1];
-      } else {
-        filename += format === 'xlsx' ? '.xlsx' : '.csv';
-      }
+      const filename = `report-${new Date().toISOString().split('T')[0]}.${
+        format === 'xlsx' ? 'xlsx' : 'csv'
+      }`;
 
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
-
-      toast.success(`Report exported as ${format.toUpperCase()}`);
     } catch (error) {
-      toast.error('Failed to export report');
+      // Error is handled by the hook
+      console.error('Export error:', error);
     }
   };
 
@@ -490,8 +465,10 @@ export function ReportBuilder() {
               )}
 
               <div className='flex gap-2'>
-                <Button type='submit' disabled={isGenerating}>
-                  {isGenerating ? 'Generating...' : 'Generate Report'}
+                <Button type='submit' disabled={generateReport.isPending}>
+                  {generateReport.isPending
+                    ? 'Generating...'
+                    : 'Generate Report'}
                 </Button>
                 {reportData && (
                   <>

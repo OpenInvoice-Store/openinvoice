@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -19,7 +18,6 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
 import { IconPlus, IconEdit, IconTrash, IconCheck } from '@tabler/icons-react';
 import { TemplateFormDialog } from './template-form-dialog';
 import {
@@ -30,81 +28,23 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-
-interface InvoiceTemplate {
-  id: string;
-  name: string;
-  layout: string | null;
-  headerTemplate: string | null;
-  footerTemplate: string | null;
-  isDefault: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import {
+  useInvoiceTemplates,
+  useDeleteInvoiceTemplate,
+  useSetDefaultTemplate,
+  type InvoiceTemplate
+} from '../hooks/use-templates';
 
 export function TemplateManagement() {
-  const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] =
     useState<InvoiceTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] =
     useState<InvoiceTemplate | null>(null);
 
-  // Fetch templates
-  const { data: templates = [], isLoading } = useQuery<InvoiceTemplate[]>({
-    queryKey: ['invoice-templates'],
-    queryFn: async () => {
-      const res = await fetch('/api/invoice-templates');
-      if (!res.ok) throw new Error('Failed to fetch templates');
-      return res.json();
-    }
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/invoice-templates/${id}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to delete template');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Template deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['invoice-templates'] });
-      setDeletingTemplate(null);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete template');
-    }
-  });
-
-  // Set default mutation
-  const setDefaultMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/invoice-templates/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isDefault: true })
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to set default template');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Default template updated');
-      queryClient.invalidateQueries({ queryKey: ['invoice-templates'] });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to set default template');
-    }
-  });
+  const { data: templates = [], isLoading } = useInvoiceTemplates();
+  const deleteTemplate = useDeleteInvoiceTemplate();
+  const setDefaultTemplate = useSetDefaultTemplate();
 
   const handleCreate = () => {
     setEditingTemplate(null);
@@ -122,7 +62,11 @@ export function TemplateManagement() {
 
   const confirmDelete = () => {
     if (deletingTemplate) {
-      deleteMutation.mutate(deletingTemplate.id);
+      deleteTemplate.mutate(deletingTemplate.id, {
+        onSuccess: () => {
+          setDeletingTemplate(null);
+        }
+      });
     }
   };
 
@@ -193,8 +137,8 @@ export function TemplateManagement() {
                         <Button
                           variant='ghost'
                           size='sm'
-                          onClick={() => setDefaultMutation.mutate(template.id)}
-                          disabled={setDefaultMutation.isPending}
+                          onClick={() => setDefaultTemplate.mutate(template.id)}
+                          disabled={setDefaultTemplate.isPending}
                         >
                           Set as Default
                         </Button>
@@ -236,7 +180,6 @@ export function TemplateManagement() {
         onSuccess={() => {
           setIsFormOpen(false);
           setEditingTemplate(null);
-          queryClient.invalidateQueries({ queryKey: ['invoice-templates'] });
         }}
       />
 
@@ -260,9 +203,9 @@ export function TemplateManagement() {
             <Button
               variant='destructive'
               onClick={confirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={deleteTemplate.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteTemplate.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { IconTrendingUp } from '@tabler/icons-react';
 import { Label, Pie, PieChart } from 'recharts';
-import { useQuery } from '@tanstack/react-query';
+import { useInvoiceStatusCounts } from '../hooks/use-dashboard-stats';
 
 import {
   Card,
@@ -20,19 +20,12 @@ import {
   ChartTooltipContent
 } from '@/components/ui/chart';
 
-async function fetchInvoiceCounts() {
-  const res = await fetch('/api/dashboard/stats');
-  if (!res.ok) throw new Error('Failed to fetch invoice counts');
-  const data = await res.json();
-  return data.invoiceCounts || {};
-}
-
 const statusConfig: Record<string, { label: string; color: string }> = {
   paid: { label: 'Paid', color: 'hsl(142, 76%, 36%)' },
   sent: { label: 'Sent', color: 'hsl(217, 91%, 60%)' },
   draft: { label: 'Draft', color: 'hsl(215, 16%, 47%)' },
   overdue: { label: 'Overdue', color: 'hsl(0, 84%, 60%)' },
-  cancelled: { label: 'Cancelled', color: 'hsl(215, 28%, 17%)' },
+  cancelled: { label: 'Cancelled', color: 'hsl(215, 28%, 17%)' }
 };
 
 const chartConfig = {
@@ -62,10 +55,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function PieGraph() {
-  const { data: invoiceCounts = {}, isLoading } = useQuery({
-    queryKey: ['invoiceStatusCounts'],
-    queryFn: fetchInvoiceCounts,
-  });
+  const { data: invoiceCounts = {}, isLoading } = useInvoiceStatusCounts();
 
   const chartData = React.useMemo(() => {
     const statuses = ['paid', 'sent', 'draft', 'overdue', 'cancelled'] as const;
@@ -75,7 +65,7 @@ export function PieGraph() {
         status,
         count: invoiceCounts[status] || 0,
         fill: statusConfig[status]?.color || 'var(--primary)',
-        label: statusConfig[status]?.label || status,
+        label: statusConfig[status]?.label || status
       }));
   }, [invoiceCounts]);
 
@@ -98,7 +88,7 @@ export function PieGraph() {
           <CardDescription>Loading...</CardDescription>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='mx-auto aspect-square h-[250px] flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground mx-auto flex aspect-square h-[250px] items-center justify-center'>
             Loading chart data...
           </div>
         </CardContent>
@@ -114,7 +104,7 @@ export function PieGraph() {
           <CardDescription>No invoices available</CardDescription>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='mx-auto aspect-square h-[250px] flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground mx-auto flex aspect-square h-[250px] items-center justify-center'>
             No invoice data to display
           </div>
         </CardContent>

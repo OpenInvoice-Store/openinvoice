@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -23,6 +22,7 @@ import {
   IconTrendingDown,
   IconChartLine
 } from '@tabler/icons-react';
+import { useFinancialForecast } from '../hooks/use-analytics';
 import {
   LineChart,
   Line,
@@ -52,24 +52,10 @@ interface ForecastSummary {
   trend: number;
 }
 
-async function fetchForecast(period: string) {
-  const response = await fetch(`/api/analytics/forecasting?period=${period}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch forecast');
-  }
-  return response.json();
-}
-
 export function FinancialForecasting() {
   const [period, setPeriod] = useState('12');
 
-  const { data, isLoading, error } = useQuery<{
-    forecasts: ForecastData[];
-    summary: ForecastSummary;
-  }>({
-    queryKey: ['forecast', period],
-    queryFn: () => fetchForecast(period)
-  });
+  const { data, isLoading, error } = useFinancialForecast(period);
 
   if (error) {
     return (

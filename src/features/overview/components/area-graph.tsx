@@ -2,8 +2,8 @@
 
 import { IconTrendingUp } from '@tabler/icons-react';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
-import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
+import { useInvoicesByMonth } from '../hooks/use-dashboard-stats';
 
 import {
   Card,
@@ -20,13 +20,6 @@ import {
   ChartTooltipContent
 } from '@/components/ui/chart';
 
-async function fetchInvoiceCounts() {
-  const res = await fetch('/api/dashboard/stats');
-  if (!res.ok) throw new Error('Failed to fetch invoice counts');
-  const data = await res.json();
-  return data.invoicesByMonth || {};
-}
-
 const chartConfig = {
   invoices: {
     label: 'Invoices'
@@ -38,10 +31,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function AreaGraph() {
-  const { data: invoicesByMonth = {}, isLoading } = useQuery({
-    queryKey: ['invoicesByMonth'],
-    queryFn: fetchInvoiceCounts,
-  });
+  const { data: invoicesByMonth = {}, isLoading } = useInvoicesByMonth();
 
   const chartData = React.useMemo(() => {
     const entries = Object.entries(invoicesByMonth);
@@ -54,7 +44,7 @@ export function AreaGraph() {
         return dateA.getTime() - dateB.getTime();
       })
       .slice(-6);
-    
+
     return sorted;
   }, [invoicesByMonth]);
 
@@ -79,7 +69,7 @@ export function AreaGraph() {
           <CardDescription>Loading...</CardDescription>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='aspect-auto h-[250px] w-full flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground flex aspect-auto h-[250px] w-full items-center justify-center'>
             Loading chart data...
           </div>
         </CardContent>
@@ -95,7 +85,7 @@ export function AreaGraph() {
           <CardDescription>No invoice data available</CardDescription>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='aspect-auto h-[250px] w-full flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground flex aspect-auto h-[250px] w-full items-center justify-center'>
             No invoice data to display
           </div>
         </CardContent>
@@ -175,12 +165,14 @@ export function AreaGraph() {
                 <>
                   {new Date(chartData[0].month).toLocaleDateString('en-US', {
                     month: 'long',
-                    year: 'numeric',
+                    year: 'numeric'
                   })}{' '}
                   -{' '}
-                  {new Date(chartData[chartData.length - 1].month).toLocaleDateString('en-US', {
+                  {new Date(
+                    chartData[chartData.length - 1].month
+                  ).toLocaleDateString('en-US', {
                     month: 'long',
-                    year: 'numeric',
+                    year: 'numeric'
                   })}
                 </>
               )}
