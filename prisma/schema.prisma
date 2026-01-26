@@ -75,6 +75,7 @@ model Invoice {
   // Recurring invoice tracking
   recurringInvoiceTemplate   RecurringInvoiceTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
   recurringTemplateId        String?
+  usageRecords                UsageRecord[]             // Usage records billed on this invoice
 
   @@unique([organizationId, invoiceNo])
   @@index([organizationId, createdAt])
@@ -288,13 +289,46 @@ model RecurringInvoiceTemplate {
   totalGenerated    Int          @default(0) // Count of invoices generated
   lastGeneratedAt   DateTime?    // Last time an invoice was generated
   
+  // Usage-based billing
+  isUsageBased      Boolean      @default(false) // Whether this template uses usage-based billing
+  usageUnit         String?      // Unit of measurement for usage (e.g., "GB", "API calls", "hours")
+  
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   invoices          Invoice[]    // Invoices generated from this template
+  usageRecords      UsageRecord[] // Usage records for this template
 
   @@index([organizationId, status])
   @@index([status, nextGenerationDate]) // For finding templates ready to generate
   @@index([customerId])
   @@map("recurring_invoice_templates")
+}
+
+model UsageRecord {
+  id                    String                  @id @default(cuid())
+  recurringTemplate     RecurringInvoiceTemplate @relation(fields: [recurringTemplateId], references: [id], onDelete: Cascade)
+  recurringTemplateId   String
+  invoice               Invoice?                 @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceId             String?
+  
+  // Usage period
+  periodStart           DateTime                // Start of the billing period
+  periodEnd             DateTime                // End of the billing period
+  
+  // Usage data
+  quantity              Float                   // Usage quantity (e.g., 100 GB, 5000 API calls)
+  metadata              String?                 // JSON string for additional usage metadata
+  
+  // Tracking
+  recordedAt            DateTime                @default(now()) // When usage was recorded
+  recordedBy            String?                 // User ID who recorded the usage (optional)
+  
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@index([recurringTemplateId, periodStart, periodEnd]) // For finding usage in a period
+  @@index([invoiceId])
+  @@index([recurringTemplateId, recordedAt])
+  @@map("usage_records")
 }
 
