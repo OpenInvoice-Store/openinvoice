@@ -7,13 +7,13 @@ import { randomBytes } from 'crypto';
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  
+
   if (!cronSecret) {
     // If no secret is set, allow access (for development)
     // In production, you should set CRON_SECRET
     return true;
   }
-  
+
   return authHeader === `Bearer ${cronSecret}`;
 }
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
+
     // Get query parameters for testing
     const searchParams = request.nextUrl.searchParams;
     const testDays = searchParams.get('testDays'); // e.g., ?testDays=2 to test invoices due in 2 days
@@ -52,7 +52,9 @@ export async function GET(request: NextRequest) {
     // Calculate date ranges for each reminder type
     // For upcoming reminders - use a range instead of exact match
     const threeDaysBefore = new Date(now);
-    threeDaysBefore.setDate(threeDaysBefore.getDate() + REMINDER_SCHEDULE.beforeDue);
+    threeDaysBefore.setDate(
+      threeDaysBefore.getDate() + REMINDER_SCHEDULE.beforeDue
+    );
     threeDaysBefore.setHours(0, 0, 0, 0);
     const threeDaysBeforeEnd = new Date(threeDaysBefore);
     threeDaysBeforeEnd.setHours(23, 59, 59, 999);
@@ -63,18 +65,20 @@ export async function GET(request: NextRequest) {
     dueDateEnd.setHours(23, 59, 59, 999);
 
     // For testing overdue, calculate the target date
-    const testOverdueDate = testOverdue 
-      ? new Date(now.getTime() - parseInt(testOverdue, 10) * 24 * 60 * 60 * 1000)
+    const testOverdueDate = testOverdue
+      ? new Date(
+          now.getTime() - parseInt(testOverdue, 10) * 24 * 60 * 60 * 1000
+        )
       : null;
 
     // Find invoices that need reminders
     // 1. Invoices due in X days (upcoming reminder)
     // If sendAll=true, get ALL unpaid invoices due in future, otherwise use exact date match
     const upcomingDateStart = sendAll ? now : threeDaysBefore;
-    const upcomingDateEnd = sendAll 
+    const upcomingDateEnd = sendAll
       ? new Date('2099-12-31') // Far future - get all future invoices
       : threeDaysBeforeEnd;
-    
+
     const upcomingInvoices = await prisma.invoice.findMany({
       where: {
         status: { in: ['sent', 'draft'] },
@@ -83,22 +87,25 @@ export async function GET(request: NextRequest) {
           lte: upcomingDateEnd
         },
         // If sendAll, ignore last reminder check completely
-        ...(testDays || sendAll ? {} : {
-          OR: [
-            { lastReminderSentAt: null } as any,
-            {
-              lastReminderSentAt: {
-                lt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
-              }
-            } as any
-          ]
-        })
+        ...(testDays || sendAll
+          ? {}
+          : {
+              OR: [
+                { lastReminderSentAt: null } as any,
+                {
+                  lastReminderSentAt: {
+                    lt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
+                  }
+                } as any
+              ]
+            })
       },
       include: {
         customer: true,
         organization: true,
         items: true,
-        payments: true
+        payments: true,
+        invoiceTaxes: true
       }
     });
 
@@ -111,22 +118,25 @@ export async function GET(request: NextRequest) {
           lte: dueDateEnd
         },
         // Only send if no reminder sent today (or if sendAll, ignore this)
-        ...(sendAll ? {} : {
-          OR: [
-            { lastReminderSentAt: null } as any,
-            {
-              lastReminderSentAt: {
-                lt: dueDateStart
-              }
-            } as any
-          ]
-        })
+        ...(sendAll
+          ? {}
+          : {
+              OR: [
+                { lastReminderSentAt: null } as any,
+                {
+                  lastReminderSentAt: {
+                    lt: dueDateStart
+                  }
+                } as any
+              ]
+            })
       },
       include: {
         customer: true,
         organization: true,
         items: true,
-        payments: true
+        payments: true,
+        invoiceTaxes: true
       }
     });
 
@@ -137,10 +147,12 @@ export async function GET(request: NextRequest) {
         dueDate: {
           lt: now, // Any invoice past due date
           // If testing specific overdue days, match that date range
-          ...(testOverdueDate ? {
-            gte: new Date(testOverdueDate.getTime() - 12 * 60 * 60 * 1000), // 12 hours before
-            lte: new Date(testOverdueDate.getTime() + 12 * 60 * 60 * 1000)  // 12 hours after
-          } : {})
+          ...(testOverdueDate
+            ? {
+                gte: new Date(testOverdueDate.getTime() - 12 * 60 * 60 * 1000), // 12 hours before
+                lte: new Date(testOverdueDate.getTime() + 12 * 60 * 60 * 1000) // 12 hours after
+              }
+            : {})
         },
         // Exclude paid invoices
         NOT: {
@@ -151,7 +163,8 @@ export async function GET(request: NextRequest) {
         customer: true,
         organization: true,
         items: true,
-        payments: true
+        payments: true,
+        invoiceTaxes: true
       }
     });
 
@@ -254,18 +267,25 @@ export async function GET(request: NextRequest) {
         // Flexible mode: send to ALL overdue invoices, but respect minimum time between reminders
         const invoiceWithReminders = invoice as any;
         const daysSinceLastReminder = invoiceWithReminders.lastReminderSentAt
-          ? Math.ceil((now.getTime() - new Date(invoiceWithReminders.lastReminderSentAt).getTime()) / (1000 * 60 * 60 * 24))
+          ? Math.ceil(
+              (now.getTime() -
+                new Date(invoiceWithReminders.lastReminderSentAt).getTime()) /
+                (1000 * 60 * 60 * 24)
+            )
           : 999; // If never sent, treat as very old
-        
+
         // Determine reminder type based on days overdue
         if (daysOverdue >= 30) {
           reminderType = 'final';
         } else {
           reminderType = 'overdue';
         }
-        
+
         // Send if no reminder sent in last 3 days (more lenient for sendAll)
-        if (daysSinceLastReminder >= 3 || !invoiceWithReminders.lastReminderSentAt) {
+        if (
+          daysSinceLastReminder >= 3 ||
+          !invoiceWithReminders.lastReminderSentAt
+        ) {
           shouldSend = true;
         }
       } else {
@@ -344,17 +364,19 @@ export async function GET(request: NextRequest) {
           upcoming: upcomingInvoices.length,
           dueToday: dueTodayInvoices.length,
           overdue: overdueInvoices.length,
-          totalUnpaid: (await prisma.invoice.count({
+          totalUnpaid: await prisma.invoice.count({
             where: {
               status: { not: 'paid' },
               NOT: { status: 'cancelled' }
             }
-          }))
+          })
         },
         invoiceDetails: {
           upcoming: upcomingInvoices.map((inv: any) => {
             const dueDate = new Date(inv.dueDate);
-            const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const daysUntilDue = Math.ceil(
+              (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            );
             return {
               id: inv.id,
               invoiceNo: inv.invoiceNo,
@@ -381,12 +403,26 @@ export async function GET(request: NextRequest) {
           })),
           overdue: overdueInvoices.map((inv: any) => {
             const dueDate = new Date(inv.dueDate);
-            const daysOverdue = Math.ceil((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+            const daysOverdue = Math.ceil(
+              (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+            );
             const invoiceWithReminders = inv as any;
-            const daysSinceLastReminder = invoiceWithReminders.lastReminderSentAt
-              ? Math.ceil((now.getTime() - new Date(invoiceWithReminders.lastReminderSentAt).getTime()) / (1000 * 60 * 60 * 24))
-              : 999;
-            const willSend = !!inv.customer?.email && (sendAll ? (daysSinceLastReminder >= 3 || !invoiceWithReminders.lastReminderSentAt) : true);
+            const daysSinceLastReminder =
+              invoiceWithReminders.lastReminderSentAt
+                ? Math.ceil(
+                    (now.getTime() -
+                      new Date(
+                        invoiceWithReminders.lastReminderSentAt
+                      ).getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                : 999;
+            const willSend =
+              !!inv.customer?.email &&
+              (sendAll
+                ? daysSinceLastReminder >= 3 ||
+                  !invoiceWithReminders.lastReminderSentAt
+                : true);
             return {
               id: inv.id,
               invoiceNo: inv.invoiceNo,
@@ -396,7 +432,9 @@ export async function GET(request: NextRequest) {
               hasEmail: !!inv.customer?.email,
               customerEmail: inv.customer?.email || null,
               lastReminder: inv.lastReminderSentAt?.toISOString() || null,
-              daysSinceLastReminder: invoiceWithReminders.lastReminderSentAt ? daysSinceLastReminder : null,
+              daysSinceLastReminder: invoiceWithReminders.lastReminderSentAt
+                ? daysSinceLastReminder
+                : null,
               reminderCount: inv.reminderCount || 0,
               willSend
             };
@@ -407,7 +445,8 @@ export async function GET(request: NextRequest) {
 
     if (dryRun) {
       response.dryRun = true;
-      response.message = 'Dry run mode - no emails were actually sent, no database updates made';
+      response.message =
+        'Dry run mode - no emails were actually sent, no database updates made';
     }
 
     return NextResponse.json(response);
@@ -454,12 +493,19 @@ async function sendReminderForInvoice(
       (sum: number, item: any) => sum + item.price * item.quantity,
       0
     );
-    const tax = invoice.items.reduce(
+    // Manual tax from item taxRate
+    const manualTax = invoice.items.reduce(
       (sum: number, item: any) =>
         sum + item.price * item.quantity * (item.taxRate / 100),
       0
     );
-    const total = subtotal + tax;
+    // Custom tax from invoice taxes
+    const customTax =
+      (invoice as any).invoiceTaxes?.reduce(
+        (sum: number, tax: any) => sum + tax.amount,
+        0
+      ) || 0;
+    const total = subtotal + manualTax + customTax;
     const totalPaid = invoice.payments.reduce(
       (sum: number, p: any) => sum + p.amount,
       0
@@ -528,8 +574,7 @@ async function sendReminderForInvoice(
           emailType: 'payment_reminder',
           recipient: invoice.customer.email,
           status: 'failed',
-          errorMessage:
-            error instanceof Error ? error.message : 'Unknown error'
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
         }
       });
     }
@@ -545,7 +590,7 @@ async function sendReminderForInvoice(
 
 async function markOverdueInvoices() {
   const now = new Date();
-  
+
   // Mark invoices as overdue if they're past due date and not paid
   await prisma.invoice.updateMany({
     where: {
@@ -558,4 +603,3 @@ async function markOverdueInvoices() {
     } as any
   });
 }
-

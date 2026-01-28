@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
             defaultCurrency: true
           } as any
         },
-        invoiceTemplate: true
+        invoiceTemplate: true,
+        invoiceTaxes: true
       } as any,
       orderBy: { invoiceNo: 'asc' }
     });
@@ -100,12 +101,20 @@ export async function POST(request: NextRequest) {
         (sum: number, item: any) => sum + item.price * item.quantity,
         0
       );
-      const tax = invoiceWithRelations.items.reduce(
+      // Manual tax from item taxRate
+      const manualTax = invoiceWithRelations.items.reduce(
         (sum: number, item: any) =>
           sum + item.price * item.quantity * (item.taxRate / 100),
         0
       );
-      const total = subtotal + tax;
+      // Custom tax from invoice taxes
+      const customTax =
+        invoiceWithRelations.invoiceTaxes?.reduce(
+          (sum: number, tax: any) => sum + tax.amount,
+          0
+        ) || 0;
+      const totalTax = manualTax + customTax;
+      const total = subtotal + totalTax;
       const totalPaid = invoiceWithRelations.payments.reduce(
         (sum: number, p: any) => sum + p.amount,
         0
@@ -118,10 +127,14 @@ export async function POST(request: NextRequest) {
           invoice={{
             ...invoiceWithRelations,
             subtotal,
-            tax,
+            manualTax,
+            customTax,
+            invoiceTaxes: invoiceWithRelations.invoiceTaxes || [],
+            tax: totalTax,
             total,
             totalPaid,
-            balance
+            balance,
+            taxCalculationMethod: invoiceWithRelations.taxCalculationMethod
           }}
         />
       ) as React.ReactElement<DocumentProps>;
@@ -224,7 +237,8 @@ export async function GET(request: NextRequest) {
             defaultCurrency: true
           } as any
         },
-        invoiceTemplate: true
+        invoiceTemplate: true,
+        invoiceTaxes: true
       } as any,
       orderBy: { invoiceNo: 'asc' }
     });
@@ -255,12 +269,20 @@ export async function GET(request: NextRequest) {
         (sum: number, item: any) => sum + item.price * item.quantity,
         0
       );
-      const tax = invoiceWithRelations.items.reduce(
+      // Manual tax from item taxRate
+      const manualTax = invoiceWithRelations.items.reduce(
         (sum: number, item: any) =>
           sum + item.price * item.quantity * (item.taxRate / 100),
         0
       );
-      const total = subtotal + tax;
+      // Custom tax from invoice taxes
+      const customTax =
+        invoiceWithRelations.invoiceTaxes?.reduce(
+          (sum: number, tax: any) => sum + tax.amount,
+          0
+        ) || 0;
+      const totalTax = manualTax + customTax;
+      const total = subtotal + totalTax;
       const totalPaid = invoiceWithRelations.payments.reduce(
         (sum: number, p: any) => sum + p.amount,
         0
@@ -273,10 +295,14 @@ export async function GET(request: NextRequest) {
           invoice={{
             ...invoiceWithRelations,
             subtotal,
-            tax,
+            manualTax,
+            customTax,
+            invoiceTaxes: invoiceWithRelations.invoiceTaxes || [],
+            tax: totalTax,
             total,
             totalPaid,
-            balance
+            balance,
+            taxCalculationMethod: invoiceWithRelations.taxCalculationMethod
           }}
         />
       ) as React.ReactElement<DocumentProps>;

@@ -238,17 +238,30 @@ export async function GET(request: NextRequest) {
             const invoiceUrl = `${baseUrl}/invoice/${shareToken}`;
             const pdfUrl = `${baseUrl}/api/invoices/${invoice.id}/pdf`;
 
+            // Fetch invoice with taxes
+            const invoiceWithTaxes = await prisma.invoice.findUnique({
+              where: { id: invoice.id },
+              include: { invoiceTaxes: true }
+            });
+
             // Calculate totals
             const subtotal = invoice.items.reduce(
               (sum, item) => sum + item.price * item.quantity,
               0
             );
-            const tax = invoice.items.reduce(
+            // Manual tax from item taxRate
+            const manualTax = invoice.items.reduce(
               (sum, item) =>
                 sum + item.price * item.quantity * (item.taxRate / 100),
               0
             );
-            const total = subtotal + tax;
+            // Custom tax from invoice taxes
+            const customTax =
+              invoiceWithTaxes?.invoiceTaxes?.reduce(
+                (sum, tax) => sum + tax.amount,
+                0
+              ) || 0;
+            const total = subtotal + manualTax + customTax;
 
             await sendInvoiceEmail({
               to: template.customer.email,
@@ -259,6 +272,19 @@ export async function GET(request: NextRequest) {
               issueDate: invoice.issueDate,
               dueDate: invoice.dueDate,
               total,
+              subtotal,
+              manualTax,
+              invoiceTaxes:
+                invoiceWithTaxes?.invoiceTaxes?.map((tax) => ({
+                  name: tax.name,
+                  rate: tax.rate,
+                  amount: tax.amount,
+                  authority: tax.authority || undefined
+                })) || [],
+              currency:
+                invoice.currency ||
+                template.organization?.defaultCurrency ||
+                'USD',
               organizationName: template.organization?.name
             });
 

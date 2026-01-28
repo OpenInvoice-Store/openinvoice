@@ -3,19 +3,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
 /**
- * Calculate invoice total including tax
+ * Calculate invoice total including tax (manual + custom tax)
  */
 function calculateInvoiceTotal(invoice: any): number {
   const subtotal = invoice.items.reduce(
     (sum: number, item: any) => sum + item.price * item.quantity,
     0
   );
-  const tax = invoice.items.reduce(
+  // Manual tax from item taxRate
+  const manualTax = invoice.items.reduce(
     (sum: number, item: any) =>
       sum + item.price * item.quantity * (item.taxRate / 100),
     0
   );
-  return subtotal + tax;
+  // Custom tax from invoice taxes (tax profile)
+  const customTax = (invoice.invoiceTaxes || []).reduce(
+    (sum: number, tax: any) => sum + tax.amount,
+    0
+  );
+  return subtotal + manualTax + customTax;
 }
 
 /**
@@ -47,7 +53,8 @@ export async function GET(request: NextRequest) {
         invoices: {
           include: {
             items: true,
-            payments: true
+            payments: true,
+            invoiceTaxes: true
           },
           where: {
             status: { not: 'cancelled' }

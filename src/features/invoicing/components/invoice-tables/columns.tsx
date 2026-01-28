@@ -45,11 +45,18 @@ const calculateTotal = (invoice: Invoice) => {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const tax = invoice.items.reduce(
+  // Manual tax from item taxRate
+  const manualTax = invoice.items.reduce(
     (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
     0
   );
-  return subtotal + tax;
+  // Custom tax from invoice taxes (tax profile)
+  const customTax =
+    (invoice as any).invoiceTaxes?.reduce(
+      (sum: number, tax: any) => sum + tax.amount,
+      0
+    ) || 0;
+  return subtotal + manualTax + customTax;
 };
 
 export const columns: ColumnDef<Invoice>[] = [

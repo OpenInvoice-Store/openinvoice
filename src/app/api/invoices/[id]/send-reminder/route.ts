@@ -31,7 +31,8 @@ export async function POST(
             product: true
           }
         },
-        payments: true
+        payments: true,
+        invoiceTaxes: true
       }
     });
 
@@ -73,11 +74,18 @@ export async function POST(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const tax = invoice.items.reduce(
+    // Manual tax from item taxRate
+    const manualTax = invoice.items.reduce(
       (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
       0
     );
-    const total = subtotal + tax;
+    // Custom tax from invoice taxes
+    const customTax =
+      (invoice as any).invoiceTaxes?.reduce(
+        (sum: number, tax: any) => sum + tax.amount,
+        0
+      ) || 0;
+    const total = subtotal + manualTax + customTax;
     const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
     const remainingBalance = total - totalPaid;
 
@@ -101,8 +109,7 @@ export async function POST(
     }
 
     // Build URLs
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const invoiceUrl = `${baseUrl}/invoice/${shareToken}`;
     const pdfUrl = `${baseUrl}/api/invoices/${id}/pdf`;
 
@@ -188,4 +195,3 @@ export async function POST(
     );
   }
 }
-

@@ -23,7 +23,7 @@ import { PaymentsList } from './payments-list';
 import { PaymentForm } from './payment-form';
 import { StripePaymentForm } from './stripe-payment-form';
 import { PaymentPlanSection } from './payment-plan-section';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   useInvoiceEmailLogs,
@@ -127,20 +127,38 @@ export function InvoiceView() {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const tax = invoice.items.reduce(
+  const manualTax = invoice.items.reduce(
     (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
     0
   );
-  const total = subtotal + tax;
+  // Get custom tax from invoice taxes (new system)
+  // Handle both array and undefined/null cases
+  const invoiceTaxesRaw = (invoice as any)?.invoiceTaxes;
+  let invoiceTaxes: any[] = [];
+
+  if (Array.isArray(invoiceTaxesRaw)) {
+    invoiceTaxes = invoiceTaxesRaw;
+  } else if (invoiceTaxesRaw && typeof invoiceTaxesRaw === 'object') {
+    invoiceTaxes = [invoiceTaxesRaw];
+  }
+
+  const customTax = invoiceTaxes.reduce((sum: number, tax: any) => {
+    if (!tax || typeof tax !== 'object') return sum;
+    const amount = parseFloat(tax.amount) || 0;
+    return sum + amount;
+  }, 0);
+
+  const totalTax = manualTax + customTax;
+  const total = subtotal + totalTax;
   const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
   const balance = total - totalPaid;
+  const taxCalculationMethod = (invoice as any)?.taxCalculationMethod;
 
   // Get currency from invoice or organization default
   const currency = getInvoiceCurrency(
     invoice as any,
     (invoice as any).organization?.defaultCurrency
   );
-  console.log('currency', currency);
 
   return (
     <div className='space-y-6'>
@@ -371,13 +389,95 @@ export function InvoiceView() {
 
                   <div className='mt-4 ml-auto w-full max-w-xs space-y-2'>
                     <div className='flex justify-between'>
-                      <span>Subtotal:</span>
-                      <span>{formatCurrencyAmount(subtotal, currency)}</span>
+                      <span className='text-muted-foreground'>Subtotal:</span>
+                      <span className='font-medium'>
+                        {formatCurrencyAmount(subtotal, currency)}
+                      </span>
                     </div>
-                    <div className='flex justify-between'>
-                      <span>Tax:</span>
-                      <span>{formatCurrencyAmount(tax, currency)}</span>
+
+                    {/* Tax Breakdown Section */}
+                    {/* Always show tax section - display taxes if they exist */}
+                    <div className='border-t pt-2'>
+                      {manualTax > 0 && (
+                        <div className='mb-1 flex justify-between'>
+                          <span className='text-muted-foreground'>
+                            Manual Tax:
+                          </span>
+                          <span>
+                            {formatCurrencyAmount(manualTax, currency)}
+                          </span>
+                        </div>
+                      )}
+                      {invoiceTaxes && invoiceTaxes.length > 0 ? (
+                        <>
+                          {invoiceTaxes.map((tax: any, index: number) => {
+                            if (!tax || typeof tax !== 'object') return null;
+                            return (
+                              <div
+                                key={tax?.id || `tax-${index}`}
+                                className='mb-1 flex justify-between'
+                              >
+                                <span className='text-muted-foreground flex items-center gap-1.5'>
+                                  <span>{tax?.name || 'Tax'}</span>
+                                  {tax?.rate !== undefined &&
+                                    tax?.rate !== null && (
+                                      <span className='text-xs'>
+                                        ({tax.rate}%)
+                                      </span>
+                                    )}
+                                  {taxCalculationMethod === 'profile' && (
+                                    <Badge
+                                      variant='outline'
+                                      className='h-4 px-1 text-xs'
+                                    >
+                                      Profile
+                                    </Badge>
+                                  )}
+                                  {taxCalculationMethod === 'override' && (
+                                    <Badge
+                                      variant='outline'
+                                      className='h-4 px-1 text-xs'
+                                    >
+                                      Override
+                                    </Badge>
+                                  )}
+                                </span>
+                                <span className='font-medium'>
+                                  {formatCurrencyAmount(
+                                    tax?.amount || 0,
+                                    currency
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {totalTax > 0 && (
+                            <div className='mt-1 flex justify-between border-t pt-1'>
+                              <span className='text-muted-foreground font-medium'>
+                                Total Tax:
+                              </span>
+                              <span className='font-medium'>
+                                {formatCurrencyAmount(totalTax, currency)}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      ) : taxCalculationMethod &&
+                        taxCalculationMethod !== 'manual' ? (
+                        <div className='text-muted-foreground text-sm italic'>
+                          Tax profile selected but no taxes calculated. Please
+                          edit the invoice to recalculate taxes.
+                        </div>
+                      ) : totalTax === 0 ? (
+                        <div className='flex justify-between'>
+                          <span className='text-muted-foreground'>Tax:</span>
+                          <span className='text-muted-foreground'>
+                            {formatCurrencyAmount(0, currency)}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
+
                     <div className='flex justify-between border-t pt-2 text-lg font-bold'>
                       <span>Total:</span>
                       <span>{formatCurrencyAmount(total, currency)}</span>

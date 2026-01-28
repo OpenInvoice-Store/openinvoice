@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     // Ensure user and organization exist in DB (fallback if webhook failed)
     const orgId = await ensureUserAndOrganization();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -23,10 +23,10 @@ export async function GET(request: NextRequest) {
         organizationId: orgId,
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-        ],
+          { email: { contains: search, mode: 'insensitive' } }
+        ]
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json(customers);
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     // Ensure user and organization exist in DB (fallback if webhook failed)
     const orgId = await ensureUserAndOrganization();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -52,13 +52,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, email, phone, address } = body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      taxExempt,
+      taxExemptionReason,
+      taxId
+    } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Name is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
     const customer = await prisma.customer.create({
@@ -68,7 +73,10 @@ export async function POST(request: NextRequest) {
         phone,
         address,
         organizationId: orgId,
-      },
+        ...(taxExempt !== undefined && { taxExempt }),
+        ...(taxExemptionReason !== undefined && { taxExemptionReason }),
+        ...(taxId !== undefined && { taxId })
+      } as any
     });
 
     return NextResponse.json(customer, { status: 201 });
@@ -80,4 +88,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

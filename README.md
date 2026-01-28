@@ -30,6 +30,7 @@ Built with modern web technologies and best practices, Open Invoice provides a p
 - 💳 **Subscription Management** - Built-in billing and subscription handling
 - 🔒 **Role-Based Access Control** - Fine-grained permissions and access control
 - 💳 **Stripe Payment Processing** - Accept online payments with Stripe Connect, support for partial payments, and automatic invoice status updates
+- 🧾 **Custom Tax System** - Flexible tax calculation with tax profiles, rules, and jurisdictions. Support for multiple tax types (sales tax, VAT/GST, service tax) with presets for common regions
 
 ## Tech Stack
 
@@ -269,6 +270,26 @@ For detailed setup instructions, see:
 - **Stripe Account Management** - Soft disconnect, reconnect, and reset options for better UX
 - **Platform Fees** - Configurable platform fee calculation and application
 
+### Tax Management
+
+- **Custom Tax System** - Built-in tax calculation engine without third-party dependencies
+  - **Tax Profiles** - Create tax profiles for different jurisdictions (country + region)
+  - **Multiple Tax Rules** - Define multiple tax rules per profile (e.g., GST + PST, VAT + local tax)
+  - **Tax Presets** - Pre-configured tax templates for common regions:
+    - Canada: GST (5%), PST (varies by province), QST/TVQ (9.975%)
+    - United States: State tax templates
+    - European Union: VAT templates
+    - United Kingdom: VAT templates
+    - Australia: GST templates
+    - India: GST templates
+  - **Tax Calculation** - Automatic tax calculation based on selected tax profile
+  - **Tax Breakdown** - Detailed tax breakdown displayed on invoices, PDFs, and emails with percentages
+  - **Manual Tax Override** - Override default tax rates for specific invoices
+  - **Tax Exemptions** - Support for tax-exempt customers with exemption reasons
+  - **Default Tax Profile** - Set default tax profile per organization
+  - **Tax Authority Labels** - Categorize taxes by authority type (federal, state, provincial, VAT, local)
+  - **User-Controlled** - Simple, explicit tax system where business owners choose appropriate taxes
+
 ## Roadmap
 
 ### Phase 1: Payment Processing (Q1 2026) ✅ Completed
@@ -387,7 +408,15 @@ For detailed setup instructions, see:
     - [x] Currency support for recurring invoices and templates ✅
     - [x] Currency display in recurring invoice tables and detail pages ✅
     - [x] Support for 20+ currencies (USD, EUR, GBP, JPY, CAD, etc.) ✅
-  - [ ] Tax calculation integration (Avalara, TaxJar)
+  - [x] **Custom Tax System** ✅
+    - [x] Tax profile management with country and region support ✅
+    - [x] Multiple tax rules per profile (GST, PST, VAT, etc.) ✅
+    - [x] Tax presets for common regions (Canada, US, EU, UK, Australia, India) ✅
+    - [x] Tax calculation engine with percentage-based rates ✅
+    - [x] Tax breakdown display in invoices, PDFs, and emails ✅
+    - [x] Manual tax override support ✅
+    - [x] Tax exemption support for customers ✅
+    - [x] Default tax profile per organization ✅
   - [ ] Payment dispute management
   - [ ] Compliance reporting (GDPR, PCI-DSS)
 - [x] **Branding & Templates** ✅
@@ -454,6 +483,9 @@ The application uses PostgreSQL with Prisma ORM. Key models include:
 - **PaymentPlan** - Payment plan configuration (frequency, installment count)
 - **Installment** - Individual payment installments with due dates and amounts
 - **RecurringInvoiceTemplate** - Recurring invoice templates with scheduling and automation
+- **TaxProfile** - Tax profiles for different jurisdictions (country, region)
+- **TaxRule** - Individual tax rules within a tax profile (name, rate, authority)
+- **InvoiceTax** - Tax breakdown records for each invoice
 - **EmailLog** - Email tracking and audit trail
 - **EmailEvent** - Individual email events (opens, clicks, bounces, etc.)
 

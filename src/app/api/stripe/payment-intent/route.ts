@@ -224,11 +224,32 @@ export async function POST(request: NextRequest) {
       (org as any)?.defaultCurrency
     ).toLowerCase(); // Stripe requires lowercase currency codes
 
+    // Check if Stripe Tax is enabled for this invoice/organization
+    const stripeTaxEnabled =
+      (invoice as any).stripeTaxEnabled || org.stripeTaxEnabled || false;
+    const customerTaxExempt = (customer as any)?.taxExempt || false;
+
+    // Calculate final amount (including Stripe Tax if enabled)
+    let finalAmount = amountInCents;
+
+    // If Stripe Tax is enabled and customer is not exempt, calculate tax
+    // Note: For now, we'll use the tax amount already stored on the invoice if available
+    // In a full implementation, you'd call the Tax Calculation API here
+    if (
+      stripeTaxEnabled &&
+      !customerTaxExempt &&
+      (invoice as any).totalTaxAmount
+    ) {
+      // Add the Stripe Tax amount to the payment amount
+      const stripeTaxAmount = Math.round((invoice as any).totalTaxAmount * 100);
+      finalAmount = amountInCents + stripeTaxAmount;
+    }
+
     // For Stripe Connect Express accounts, create payment intent on PLATFORM account
     // and use on_behalf_of + transfer_data to route funds to connected account
     // This allows the client secret to work with the platform's publishable key
     const paymentIntentParams: any = {
-      amount: amountInCents,
+      amount: finalAmount,
       currency: invoiceCurrency,
       customer: customerId || undefined,
       // Use preferred payment method if available
@@ -239,7 +260,13 @@ export async function POST(request: NextRequest) {
         invoiceId,
         invoiceNo: invoice.invoiceNo.toString(),
         organizationId: invoice.organizationId,
-        customerId: invoice.customerId
+        customerId: invoice.customerId,
+        ...(stripeTaxEnabled && (invoice as any).totalTaxAmount
+          ? {
+              stripeTaxAmount: String((invoice as any).totalTaxAmount),
+              stripeTaxEnabled: 'true'
+            }
+          : {})
       },
       description: `Payment for Invoice #${invoice.invoiceNo}`,
       // Use Stripe's automatic payment methods so the Payment Element can offer
@@ -260,6 +287,13 @@ export async function POST(request: NextRequest) {
         destination: org.stripeAccountId
       }
     };
+
+    // Note: Stripe Tax automatic calculation via PaymentIntent requires:
+    // 1. Stripe Tax to be enabled in the Stripe Dashboard
+    // 2. Customer to have a valid address
+    // 3. Using the Tax Calculation API before creating the PaymentIntent
+    // For now, we include the pre-calculated tax in the amount
+    // Future enhancement: Use Stripe's Tax Calculation API to calculate tax dynamically
 
     // Add application_fee_amount if platform fee is configured
     // When application_fee_amount is set, Stripe automatically transfers

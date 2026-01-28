@@ -26,6 +26,8 @@ export interface Invoice {
   shareToken?: string | null;
   emailSentCount?: number;
   currency?: string | null;
+  taxCalculationMethod?: string | null;
+  taxProfileId?: string | null;
   organization?: {
     defaultCurrency: string;
   };
@@ -42,6 +44,16 @@ export interface Invoice {
   };
   items: InvoiceItem[];
   payments: Payment[];
+  invoiceTaxes?: Array<{
+    id: string;
+    invoiceId: string;
+    name: string;
+    rate: number;
+    amount: number;
+    authority?: string | null;
+    isOverride: boolean;
+    createdAt: string;
+  }>;
 }
 
 export interface Payment {

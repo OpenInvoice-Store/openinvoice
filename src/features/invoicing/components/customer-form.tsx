@@ -15,6 +15,14 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import {
   useCreateCustomer,
   useCustomer,
@@ -23,12 +31,16 @@ import {
 import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { FormDescription } from '@/components/ui/form';
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   phone: z.string().optional(),
-  address: z.string().optional()
+  address: z.string().optional(),
+  taxExempt: z.boolean().optional(),
+  taxExemptionReason: z.string().optional(),
+  taxId: z.string().optional()
 });
 
 type CustomerFormData = z.infer<typeof customerSchema>;
@@ -49,7 +61,10 @@ export function CustomerForm() {
       name: '',
       email: '',
       phone: '',
-      address: ''
+      address: '',
+      taxExempt: false,
+      taxExemptionReason: '',
+      taxId: ''
     }
   });
 
@@ -59,7 +74,10 @@ export function CustomerForm() {
         name: customer.name,
         email: customer.email || '',
         phone: customer.phone || '',
-        address: customer.address || ''
+        address: customer.address || '',
+        taxExempt: (customer as any).taxExempt || false,
+        taxExemptionReason: (customer as any).taxExemptionReason || '',
+        taxId: (customer as any).taxId || ''
       });
     }
   }, [customer, isEditing, form]);
@@ -148,6 +166,94 @@ export function CustomerForm() {
             </FormItem>
           )}
         />
+
+        {/* Tax Exemption Section */}
+        <div className='space-y-4 rounded-lg border p-4'>
+          <div className='space-y-2'>
+            <h3 className='text-sm font-semibold'>Tax Information</h3>
+            <p className='text-muted-foreground text-xs'>
+              Configure tax exemption status and tax ID for this customer
+            </p>
+          </div>
+
+          <FormField
+            control={form.control}
+            name='taxExempt'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-3'>
+                <div className='space-y-0.5'>
+                  <FormLabel>Tax Exempt</FormLabel>
+                  <FormDescription>
+                    Mark this customer as tax exempt (e.g., nonprofit, export)
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {form.watch('taxExempt') && (
+            <>
+              <FormField
+                control={form.control}
+                name='taxExemptionReason'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Exemption Reason</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ''}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder='Select exemption reason' />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value='nonprofit'>
+                          Nonprofit Organization
+                        </SelectItem>
+                        <SelectItem value='export'>
+                          Export/International
+                        </SelectItem>
+                        <SelectItem value='government'>
+                          Government Entity
+                        </SelectItem>
+                        <SelectItem value='resale'>
+                          Resale Certificate
+                        </SelectItem>
+                        <SelectItem value='other'>Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+
+          <FormField
+            control={form.control}
+            name='taxId'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tax ID</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder='e.g., VAT, GST, EIN, SSN' />
+                </FormControl>
+                <FormDescription>
+                  Customer's tax identification number for tax reporting
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <div className='flex gap-2'>
           <Button

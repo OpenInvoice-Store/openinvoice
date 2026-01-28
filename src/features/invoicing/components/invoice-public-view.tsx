@@ -40,24 +40,38 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
     (sum: number, item: any) => sum + item.price * item.quantity,
     0
   );
-  const tax = invoice.items.reduce(
+  const manualTax = invoice.items.reduce(
     (sum: number, item: any) =>
       sum + item.price * item.quantity * (item.taxRate / 100),
     0
   );
-  const total = subtotal + tax;
+  // Get custom tax from invoice taxes (new system)
+  // Handle both array and undefined/null cases
+  const invoiceTaxesRaw = (invoice as any).invoiceTaxes;
+  const invoiceTaxes = Array.isArray(invoiceTaxesRaw)
+    ? invoiceTaxesRaw
+    : invoiceTaxesRaw
+      ? [invoiceTaxesRaw]
+      : [];
+  const customTax = invoiceTaxes.reduce((sum: number, tax: any) => {
+    const amount =
+      typeof tax === 'object' && tax !== null ? tax.amount || 0 : 0;
+    return sum + amount;
+  }, 0);
+  const totalTax = manualTax + customTax;
+  const total = subtotal + totalTax;
   const totalPaid = invoice.payments.reduce(
     (sum: number, p: any) => sum + p.amount,
     0
   );
   const balance = total - totalPaid;
+  const taxCalculationMethod = (invoice as any).taxCalculationMethod;
 
   // Get currency from invoice or organization default
   const currency = getInvoiceCurrency(
     invoice,
     invoice.organization?.defaultCurrency
   );
-  console.log('currency', currency);
   // Calculate payment plan information
   const paymentPlanInfo = useMemo(() => {
     if (!invoice.paymentPlan || invoice.paymentPlan.status !== 'active') {
@@ -483,12 +497,70 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
             >
               <div className='flex justify-between'>
                 <span className='text-muted-foreground'>Subtotal:</span>
-                <span>{formatCurrencyAmount(subtotal, currency)}</span>
+                <span className='font-medium'>
+                  {formatCurrencyAmount(subtotal, currency)}
+                </span>
               </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Tax:</span>
-                <span>{formatCurrencyAmount(tax, currency)}</span>
-              </div>
+
+              {/* Tax Breakdown Section */}
+              {(manualTax > 0 ||
+                customTax > 0 ||
+                (invoiceTaxes && invoiceTaxes.length > 0) ||
+                taxCalculationMethod) && (
+                <div className='space-y-1 border-t pt-2'>
+                  {manualTax > 0 && (
+                    <div className='flex justify-between'>
+                      <span className='text-muted-foreground'>Manual Tax:</span>
+                      <span>{formatCurrencyAmount(manualTax, currency)}</span>
+                    </div>
+                  )}
+                  {invoiceTaxes && invoiceTaxes.length > 0 ? (
+                    <>
+                      {invoiceTaxes.map((tax: any, index: number) => (
+                        <div
+                          key={tax?.id || index}
+                          className='flex justify-between'
+                        >
+                          <span className='text-muted-foreground flex items-center gap-1.5'>
+                            <span>{tax?.name || 'Tax'}</span>
+                            {tax?.rate !== undefined && (
+                              <span className='text-xs'>({tax.rate}%)</span>
+                            )}
+                          </span>
+                          <span className='font-medium'>
+                            {formatCurrencyAmount(tax?.amount || 0, currency)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  ) : taxCalculationMethod &&
+                    taxCalculationMethod !== 'manual' ? (
+                    <div className='text-muted-foreground text-sm italic'>
+                      Tax profile selected but no taxes calculated.
+                    </div>
+                  ) : null}
+                  {totalTax > 0 && (
+                    <div className='mt-1 flex justify-between border-t pt-1'>
+                      <span className='text-muted-foreground font-medium'>
+                        Total Tax:
+                      </span>
+                      <span className='font-medium'>
+                        {formatCurrencyAmount(totalTax, currency)}
+                      </span>
+                    </div>
+                  )}
+                  {totalTax === 0 &&
+                    (!taxCalculationMethod ||
+                      taxCalculationMethod === 'manual') && (
+                      <div className='flex justify-between'>
+                        <span className='text-muted-foreground'>Tax:</span>
+                        <span className='text-muted-foreground'>
+                          {formatCurrencyAmount(0, currency)}
+                        </span>
+                      </div>
+                    )}
+                </div>
+              )}
               <div
                 className={`flex justify-between border-t ${layout === 'compact' ? 'pt-1' : 'pt-2'} font-semibold`}
                 style={{ borderColor: primaryColor }}

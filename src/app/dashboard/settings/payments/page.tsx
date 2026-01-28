@@ -21,9 +21,19 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Info, CheckCircle2, XCircle, Loader2, Link2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import {
+  Info,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Link2,
+  Receipt
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { TaxProfileSettings } from '@/features/invoicing/components/tax-profile-settings';
 
 interface StripeConnectStatus {
   connected: boolean;
@@ -527,7 +537,179 @@ export default function PaymentsSettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Stripe Tax Settings */}
+        <Card>
+          <CardHeader>
+            <div className='flex items-center justify-between'>
+              <div>
+                <CardTitle className='flex items-center gap-2'>
+                  <Receipt className='h-5 w-5' />
+                  Stripe Tax
+                </CardTitle>
+                <CardDescription>
+                  Enable automatic tax calculation using Stripe Tax. Requires
+                  Stripe Connect to be connected.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <StripeTaxSettings stripeStatus={stripeStatus} />
+          </CardContent>
+        </Card>
       </div>
     </PageContainer>
+  );
+}
+
+// Stripe Tax Settings Component
+function StripeTaxSettings({
+  stripeStatus
+}: {
+  stripeStatus?: StripeConnectStatus;
+}) {
+  const queryClient = useQueryClient();
+
+  // Fetch Stripe Tax settings
+  const { data: taxSettings, isLoading } = useQuery({
+    queryKey: ['stripe-tax-settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/organizations/stripe-tax');
+      if (!response.ok) throw new Error('Failed to fetch tax settings');
+      return response.json();
+    }
+  });
+
+  // Update Stripe Tax settings
+  const updateTaxSettings = useMutation({
+    mutationFn: async (data: {
+      stripeTaxEnabled?: boolean;
+      taxRegistrationNumber?: string;
+    }) => {
+      const response = await fetch('/api/organizations/stripe-tax', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update tax settings');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stripe-tax-settings'] });
+      toast.success('Tax settings updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update tax settings');
+    }
+  });
+
+  const canEnableTax =
+    stripeStatus?.connected &&
+    stripeStatus?.chargesEnabled &&
+    taxSettings?.stripeConnectEnabled;
+
+  if (isLoading) {
+    return <div className='text-muted-foreground text-sm'>Loading...</div>;
+  }
+
+  return (
+    <div className='space-y-4'>
+      {!stripeStatus?.connected && (
+        <Alert variant='default'>
+          <Info className='h-4 w-4' />
+          <AlertDescription>
+            You must connect your Stripe account before enabling Stripe Tax.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {stripeStatus?.connected && !stripeStatus?.chargesEnabled && (
+        <Alert variant='default'>
+          <Info className='h-4 w-4' />
+          <AlertDescription>
+            Your Stripe account must have charges enabled to use Stripe Tax.
+            Please complete your Stripe account setup.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className='space-y-4'>
+        <div className='flex items-center justify-between rounded-lg border p-4'>
+          <div className='space-y-0.5'>
+            <Label htmlFor='stripe-tax-enabled' className='text-base'>
+              Enable Stripe Tax
+            </Label>
+            <p className='text-muted-foreground text-sm'>
+              Automatically calculate taxes based on customer location and
+              product type
+            </p>
+          </div>
+          <Switch
+            id='stripe-tax-enabled'
+            checked={taxSettings?.stripeTaxEnabled || false}
+            disabled={!canEnableTax || updateTaxSettings.isPending}
+            onCheckedChange={(checked) => {
+              updateTaxSettings.mutate({ stripeTaxEnabled: checked });
+            }}
+          />
+        </div>
+
+        {taxSettings?.stripeTaxEnabled && (
+          <div className='space-y-2'>
+            <Label htmlFor='tax-registration-number'>
+              Tax Registration Number
+            </Label>
+            <Input
+              id='tax-registration-number'
+              placeholder='e.g., VAT, GST, EIN'
+              value={taxSettings?.taxRegistrationNumber || ''}
+              onChange={(e) => {
+                updateTaxSettings.mutate({
+                  taxRegistrationNumber: e.target.value || undefined
+                });
+              }}
+              disabled={updateTaxSettings.isPending}
+            />
+            <p className='text-muted-foreground text-xs'>
+              Your tax registration number (VAT, GST, EIN, etc.) for tax
+              reporting
+            </p>
+          </div>
+        )}
+
+        {taxSettings?.stripeTaxEnabled && (
+          <Alert>
+            <Info className='h-4 w-4' />
+            <AlertDescription>
+              <strong>Next Steps:</strong>
+              <ul className='mt-2 list-disc space-y-1 pl-5'>
+                <li>
+                  Enable Stripe Tax in your{' '}
+                  <a
+                    href='https://dashboard.stripe.com/tax/settings'
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='font-medium underline hover:no-underline'
+                  >
+                    Stripe Dashboard
+                  </a>
+                </li>
+                <li>Configure your tax registration numbers in Stripe</li>
+                <li>Set up product tax codes for accurate tax calculation</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+
+      {/* Custom Tax System */}
+      <div className='mt-8'>
+        <TaxProfileSettings />
+      </div>
+    </div>
   );
 }

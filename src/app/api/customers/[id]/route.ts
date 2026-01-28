@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -23,10 +23,10 @@ export async function GET(
         invoices: {
           include: {
             items: true,
-            payments: true,
-          },
-        },
-      },
+            payments: true
+          }
+        }
+      }
     });
 
     if (!customer) {
@@ -52,7 +52,7 @@ export async function PUT(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -61,10 +61,10 @@ export async function PUT(
     }
 
     const { id } = await params;
-    
+
     // Verify customer belongs to the organization
     const existingCustomer = await prisma.customer.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!existingCustomer) {
@@ -75,7 +75,15 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, email, phone, address } = body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      taxExempt,
+      taxExemptionReason,
+      taxId
+    } = body;
 
     const customer = await prisma.customer.update({
       where: { id },
@@ -84,7 +92,10 @@ export async function PUT(
         email,
         phone,
         address,
-      },
+        ...(taxExempt !== undefined && { taxExempt }),
+        ...(taxExemptionReason !== undefined && { taxExemptionReason }),
+        ...(taxId !== undefined && { taxId })
+      } as any
     });
 
     return NextResponse.json(customer);
@@ -103,7 +114,7 @@ export async function DELETE(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -112,10 +123,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    
+
     // Verify customer belongs to the organization
     const customer = await prisma.customer.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!customer) {
@@ -126,7 +137,7 @@ export async function DELETE(
     }
 
     await prisma.customer.delete({
-      where: { id },
+      where: { id }
     });
 
     return NextResponse.json({ success: true });
@@ -138,4 +149,3 @@ export async function DELETE(
     );
   }
 }
-

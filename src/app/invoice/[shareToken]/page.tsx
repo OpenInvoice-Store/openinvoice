@@ -49,7 +49,8 @@ export default async function PublicInvoicePage({
           footerText: true
         }
       },
-      invoiceTemplate: true
+      invoiceTemplate: true,
+      invoiceTaxes: true
     } as any
   });
 

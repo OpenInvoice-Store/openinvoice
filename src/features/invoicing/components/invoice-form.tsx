@@ -37,6 +37,11 @@ import { formatCurrency } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { useBrandingSettings } from '../hooks/use-branding';
 import { CURRENCIES } from '@/lib/currency';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info, Loader2 } from 'lucide-react';
+import { useState, useCallback } from 'react';
 
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -79,8 +84,36 @@ export function InvoiceForm() {
       return res.json();
     }
   });
+
+  // Fetch tax profiles
+  const { data: taxProfiles = [] } = useQuery({
+    queryKey: ['tax-profiles'],
+    queryFn: async () => {
+      const response = await fetch('/api/tax/profiles');
+      if (!response.ok) return [];
+      return response.json();
+    }
+  });
+
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
+
+  // State for tax calculation
+  const [selectedTaxProfileId, setSelectedTaxProfileId] = useState<
+    string | null
+  >(null);
+  const [taxCalculationResult, setTaxCalculationResult] = useState<{
+    taxAmount: number;
+    taxes: Array<{
+      name: string;
+      rate: number;
+      amount: number;
+      authority?: string;
+    }>;
+    subtotal: number;
+    total: number;
+  } | null>(null);
+  const [isCalculatingTax, setIsCalculatingTax] = useState(false);
 
   const defaultTemplate = templates.find((t) => t.isDefault);
 
@@ -116,6 +149,10 @@ export function InvoiceForm() {
         branding?.defaultCurrency ||
         'USD';
 
+      // Load existing tax profile if available
+      const invoiceTaxProfileId = (invoice as any).taxProfileId || null;
+      setSelectedTaxProfileId(invoiceTaxProfileId);
+
       form.reset({
         customerId: invoice.customerId,
         issueDate: invoice.issueDate.split('T')[0],
@@ -132,8 +169,15 @@ export function InvoiceForm() {
           taxRate: item.taxRate
         }))
       });
+
+      // Calculate tax if tax profile exists
+      if (invoiceTaxProfileId) {
+        setTimeout(() => {
+          calculateTax();
+        }, 100);
+      }
     }
-  }, [invoice, isEditing, form]);
+  }, [invoice, isEditing, form, branding]);
 
   const handleProductChange = (index: number, productId: string) => {
     const product = products?.find((p) => p.id === productId);
@@ -145,46 +189,158 @@ export function InvoiceForm() {
     }
   };
 
+  // Calculate tax using custom tax system
+  const calculateTax = useCallback(async () => {
+    const items = form.watch('items');
+    const customerId = form.watch('customerId');
+
+    if (
+      !selectedTaxProfileId ||
+      selectedTaxProfileId === 'none' ||
+      !customerId ||
+      items.length === 0
+    ) {
+      setTaxCalculationResult(null);
+      return;
+    }
+
+    setIsCalculatingTax(true);
+    try {
+      const response = await fetch('/api/tax/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            price: item.price,
+            quantity: item.quantity
+          })),
+          customerId,
+          taxProfileId:
+            selectedTaxProfileId === 'none' ? null : selectedTaxProfileId
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTaxCalculationResult({
+          taxAmount: data.taxAmount || 0,
+          taxes: data.taxes || [],
+          subtotal: data.subtotal || 0,
+          total: data.total || 0
+        });
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to calculate tax');
+        setTaxCalculationResult(null);
+      }
+    } catch (error) {
+      console.error('Error calculating tax:', error);
+      toast.error('Failed to calculate tax');
+      setTaxCalculationResult(null);
+    } finally {
+      setIsCalculatingTax(false);
+    }
+  }, [selectedTaxProfileId, form, branding]);
+
+  // Recalculate tax when items, customer, or tax profile changes
+  useEffect(() => {
+    if (
+      selectedTaxProfileId &&
+      selectedTaxProfileId !== 'none' &&
+      form.watch('customerId')
+    ) {
+      const timeoutId = setTimeout(() => {
+        calculateTax();
+      }, 500); // Debounce for 500ms
+
+      return () => clearTimeout(timeoutId);
+    } else {
+      setTaxCalculationResult(null);
+    }
+  }, [
+    form.watch('items'),
+    form.watch('customerId'),
+    selectedTaxProfileId,
+    calculateTax
+  ]);
+
   const calculateTotals = () => {
     const items = form.watch('items');
     const subtotal = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const tax = items.reduce(
+    // Manual tax (from taxRate field)
+    const manualTax = items.reduce(
       (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
       0
     );
-    return { subtotal, tax, total: subtotal + tax };
+    // Custom tax (from tax profile)
+    const customTax = taxCalculationResult?.taxAmount || 0;
+    const totalTax = manualTax + customTax;
+    return {
+      subtotal,
+      manualTax,
+      customTax,
+      totalTax,
+      total: subtotal + totalTax
+    };
   };
 
   const onSubmit = async (data: InvoiceFormData) => {
     try {
       if (isEditing && id) {
-        await updateInvoice.mutateAsync({
-          id,
-          customerId: data.customerId,
-          issueDate: data.issueDate,
-          dueDate: data.dueDate,
-          status: data.status,
-          notes: data.notes,
-          templateId: data.templateId || undefined,
-          currency: data.currency,
-          items: data.items.map((item) => ({
-            productId: item.productId,
-            description: item.description,
-            quantity: item.quantity,
-            price: item.price,
-            taxRate: item.taxRate
-          }))
-        } as Parameters<typeof updateInvoice.mutateAsync>[0]);
+        // For updates, call API directly to include Stripe Tax data
+        const response = await fetch(`/api/invoices/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerId: data.customerId,
+            issueDate: data.issueDate,
+            dueDate: data.dueDate,
+            status: data.status,
+            notes: data.notes,
+            templateId: data.templateId || undefined,
+            currency: data.currency,
+            items: data.items.map((item) => ({
+              productId: item.productId,
+              description: item.description,
+              quantity: item.quantity,
+              price: item.price,
+              taxRate: item.taxRate
+            })),
+            taxProfileId:
+              selectedTaxProfileId && selectedTaxProfileId !== 'none'
+                ? selectedTaxProfileId
+                : undefined
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update invoice');
+        }
+
         toast.success('Invoice updated successfully');
       } else {
-        await createInvoice.mutateAsync({
-          ...data,
-          templateId: data.templateId || undefined,
-          currency: data.currency
+        // For create, we need to call the API directly with tax data
+        const response = await fetch('/api/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            templateId: data.templateId || undefined,
+            currency: data.currency,
+            taxProfileId:
+              selectedTaxProfileId && selectedTaxProfileId !== 'none'
+                ? selectedTaxProfileId
+                : undefined
+          })
         });
+
+        if (!response.ok) {
+          throw new Error('Failed to create invoice');
+        }
+
         toast.success('Invoice created successfully');
       }
       router.push('/dashboard/invoices');
@@ -500,6 +656,95 @@ export function InvoiceForm() {
         </div>
       </div>
 
+      {/* Tax Profile Selector */}
+      {taxProfiles.length > 0 && (
+        <div className='space-y-3 rounded-lg border p-4'>
+          <div className='space-y-2'>
+            <Label htmlFor='tax-profile' className='text-base font-semibold'>
+              Tax Profile (Optional)
+            </Label>
+            <p className='text-muted-foreground text-sm'>
+              Select a tax profile to automatically calculate taxes
+            </p>
+            <Select
+              value={selectedTaxProfileId || 'none'}
+              onValueChange={(value) => {
+                if (value === 'none') {
+                  setSelectedTaxProfileId(null);
+                  setTaxCalculationResult(null);
+                } else {
+                  setSelectedTaxProfileId(value);
+                }
+              }}
+            >
+              <SelectTrigger id='tax-profile'>
+                <SelectValue placeholder='Select tax profile...' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='none'>
+                  None (use manual tax rates)
+                </SelectItem>
+                {taxProfiles.map((profile: any) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.name}
+                    {profile.isDefault && ' (Default)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedTaxProfileId &&
+            selectedTaxProfileId !== 'none' &&
+            !form.watch('customerId') && (
+              <Alert variant='default'>
+                <Info className='h-4 w-4' />
+                <AlertDescription>
+                  Please select a customer to calculate tax
+                </AlertDescription>
+              </Alert>
+            )}
+
+          {selectedTaxProfileId &&
+            selectedTaxProfileId !== 'none' &&
+            isCalculatingTax && (
+              <div className='text-muted-foreground flex items-center gap-2 text-sm'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                Calculating tax...
+              </div>
+            )}
+
+          {selectedTaxProfileId &&
+            selectedTaxProfileId !== 'none' &&
+            taxCalculationResult &&
+            taxCalculationResult.taxes.length > 0 && (
+              <div className='bg-muted space-y-1 rounded-md p-3'>
+                {taxCalculationResult.taxes.map((tax, index) => (
+                  <div key={index} className='flex justify-between text-sm'>
+                    <span className='text-muted-foreground'>{tax.name}:</span>
+                    <span className='font-medium'>
+                      {formatCurrency(
+                        tax.amount,
+                        form.watch('currency') || 'USD'
+                      )}{' '}
+                      ({tax.rate}%)
+                    </span>
+                  </div>
+                ))}
+                <div className='mt-1 flex justify-between border-t pt-1 text-sm font-medium'>
+                  <span>Total Tax:</span>
+                  <span>
+                    {formatCurrency(
+                      taxCalculationResult.taxAmount,
+                      form.watch('currency') || 'USD'
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+        </div>
+      )}
+
       <div className='ml-auto w-64 space-y-2 rounded-md border p-4'>
         <div className='flex justify-between'>
           <span>Subtotal:</span>
@@ -507,10 +752,32 @@ export function InvoiceForm() {
             {formatCurrency(totals.subtotal, form.watch('currency') || 'USD')}
           </span>
         </div>
+        {totals.manualTax > 0 && (
+          <div className='flex justify-between'>
+            <span>Manual Tax:</span>
+            <span>
+              {formatCurrency(
+                totals.manualTax,
+                form.watch('currency') || 'USD'
+              )}
+            </span>
+          </div>
+        )}
+        {totals.customTax > 0 && (
+          <div className='flex justify-between'>
+            <span>Tax (Profile):</span>
+            <span>
+              {formatCurrency(
+                totals.customTax,
+                form.watch('currency') || 'USD'
+              )}
+            </span>
+          </div>
+        )}
         <div className='flex justify-between'>
-          <span>Tax:</span>
+          <span>Total Tax:</span>
           <span>
-            {formatCurrency(totals.tax, form.watch('currency') || 'USD')}
+            {formatCurrency(totals.totalTax, form.watch('currency') || 'USD')}
           </span>
         </div>
         <div className='flex justify-between border-t pt-2 text-lg font-bold'>

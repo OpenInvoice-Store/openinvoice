@@ -318,10 +318,40 @@ export function InvoicePDF({ invoice }: InvoicePDFProps) {
             <Text>Subtotal:</Text>
             <Text>{formatCurrencyAmount(invoice.subtotal, currency)}</Text>
           </View>
-          <View style={styles.totalRow}>
-            <Text>Tax:</Text>
-            <Text>{formatCurrencyAmount(invoice.tax, currency)}</Text>
-          </View>
+          {/* Manual Tax */}
+          {invoice.manualTax > 0 && (
+            <View style={styles.totalRow}>
+              <Text>Manual Tax:</Text>
+              <Text>{formatCurrencyAmount(invoice.manualTax, currency)}</Text>
+            </View>
+          )}
+          {/* Custom Tax Breakdown */}
+          {invoice.invoiceTaxes && invoice.invoiceTaxes.length > 0 && (
+            <>
+              {invoice.invoiceTaxes.map((tax: any, index: number) => (
+                <View key={tax.id || index} style={styles.totalRow}>
+                  <Text>
+                    {tax.name} ({tax.rate}%):
+                  </Text>
+                  <Text>{formatCurrencyAmount(tax.amount, currency)}</Text>
+                </View>
+              ))}
+            </>
+          )}
+          {/* Total Tax */}
+          {invoice.tax > 0 && (
+            <View
+              style={[
+                styles.totalRow,
+                { borderTop: '1pt solid #e0e0e0', paddingTop: 5, marginTop: 5 }
+              ]}
+            >
+              <Text style={{ fontWeight: 'bold' }}>Total Tax:</Text>
+              <Text style={{ fontWeight: 'bold' }}>
+                {formatCurrencyAmount(invoice.tax, currency)}
+              </Text>
+            </View>
+          )}
           <View style={[styles.totalRow, styles.grandTotal]}>
             <Text>Total:</Text>
             <Text>{formatCurrencyAmount(invoice.total, currency)}</Text>

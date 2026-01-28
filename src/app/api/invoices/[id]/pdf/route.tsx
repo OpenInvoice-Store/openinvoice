@@ -47,7 +47,8 @@ export async function GET(
             defaultCurrency: true
           }
         },
-        invoiceTemplate: true
+        invoiceTemplate: true,
+        invoiceTaxes: true
       }
     });
 
@@ -60,11 +61,19 @@ export async function GET(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const tax = invoice.items.reduce(
+    // Manual tax from item taxRate
+    const manualTax = invoice.items.reduce(
       (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
       0
     );
-    const total = subtotal + tax;
+    // Custom tax from invoice taxes
+    const customTax =
+      (invoice as any).invoiceTaxes?.reduce(
+        (sum: number, tax: any) => sum + tax.amount,
+        0
+      ) || 0;
+    const totalTax = manualTax + customTax;
+    const total = subtotal + totalTax;
     const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
     const balance = total - totalPaid;
 
@@ -73,10 +82,14 @@ export async function GET(
         invoice={{
           ...invoice,
           subtotal,
-          tax,
+          manualTax,
+          customTax,
+          invoiceTaxes: (invoice as any).invoiceTaxes || [],
+          tax: totalTax,
           total,
           totalPaid,
-          balance
+          balance,
+          taxCalculationMethod: (invoice as any).taxCalculationMethod
         }}
       />
     ) as React.ReactElement<DocumentProps>;

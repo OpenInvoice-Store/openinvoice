@@ -15,6 +15,15 @@ export interface SendInvoiceEmailParams {
   issueDate: Date | string;
   dueDate: Date | string;
   total: number;
+  subtotal?: number;
+  manualTax?: number;
+  invoiceTaxes?: Array<{
+    name: string;
+    rate: number;
+    amount: number;
+    authority?: string;
+  }>;
+  currency?: string;
   organizationName?: string;
   fromEmail?: string;
   fromName?: string;
@@ -106,6 +115,10 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams) {
         issueDate,
         dueDate,
         total,
+        subtotal: params.subtotal,
+        manualTax: params.manualTax,
+        invoiceTaxes: params.invoiceTaxes,
+        currency: params.currency,
         organizationName,
         branding: params.branding
       })
@@ -246,6 +259,15 @@ function generateInvoiceEmailHTML(params: {
   issueDate: Date | string;
   dueDate: Date | string;
   total: number;
+  subtotal?: number;
+  manualTax?: number;
+  invoiceTaxes?: Array<{
+    name: string;
+    rate: number;
+    amount: number;
+    authority?: string;
+  }>;
+  currency?: string;
   organizationName?: string;
   branding?: {
     logoUrl?: string | null;
@@ -266,6 +288,10 @@ function generateInvoiceEmailHTML(params: {
     issueDate,
     dueDate,
     total,
+    subtotal,
+    manualTax,
+    invoiceTaxes,
+    currency = 'USD',
     organizationName,
     branding
   } = params;
@@ -286,10 +312,18 @@ function generateInvoiceEmailHTML(params: {
     day: 'numeric'
   });
 
-  const formattedTotal = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(total);
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
+
+  const formattedTotal = formatCurrency(total);
+  const formattedSubtotal =
+    subtotal !== undefined ? formatCurrency(subtotal) : null;
+  const formattedManualTax =
+    manualTax !== undefined && manualTax > 0 ? formatCurrency(manualTax) : null;
 
   return `
 <!DOCTYPE html>
@@ -334,9 +368,56 @@ function generateInvoiceEmailHTML(params: {
           <td style="padding: 8px 0; color: #666;"><strong>Due Date:</strong></td>
           <td style="padding: 8px 0; text-align: right; color: #333;">${formattedDueDate}</td>
         </tr>
+        ${
+          formattedSubtotal !== null
+            ? `
         <tr>
-          <td style="padding: 8px 0; color: #666;"><strong>Total Amount:</strong></td>
-          <td style="padding: 8px 0; text-align: right; color: #1a1a1a; font-size: 18px; font-weight: bold;">${formattedTotal}</td>
+          <td style="padding: 8px 0; color: #666;"><strong>Subtotal:</strong></td>
+          <td style="padding: 8px 0; text-align: right; color: #333;">${formattedSubtotal}</td>
+        </tr>
+        `
+            : ''
+        }
+        ${
+          formattedManualTax !== null && formattedManualTax !== '0'
+            ? `
+        <tr>
+          <td style="padding: 8px 0; color: #666;"><strong>Manual Tax:</strong></td>
+          <td style="padding: 8px 0; text-align: right; color: #333;">${formattedManualTax}</td>
+        </tr>
+        `
+            : ''
+        }
+        ${
+          invoiceTaxes && Array.isArray(invoiceTaxes) && invoiceTaxes.length > 0
+            ? invoiceTaxes
+                .map(
+                  (tax: any) => `
+        <tr>
+          <td style="padding: 8px 0; color: #666;"><strong>${tax.name || 'Tax'} (${tax.rate || 0}%):</strong></td>
+          <td style="padding: 8px 0; text-align: right; color: #333;">${formatCurrency(tax.amount || 0)}</td>
+        </tr>
+        `
+                )
+                .join('')
+            : ''
+        }
+        ${
+          formattedManualTax !== null ||
+          (invoiceTaxes &&
+            Array.isArray(invoiceTaxes) &&
+            invoiceTaxes.length > 0)
+            ? `
+        <tr style="border-top: 1px solid #e5e7eb; margin-top: 4px;">
+          <td style="padding: 8px 0; color: #666;"><strong>Total Tax:</strong></td>
+          <td style="padding: 8px 0; text-align: right; color: #333; font-weight: bold;">${formatCurrency((manualTax || 0) + (invoiceTaxes && Array.isArray(invoiceTaxes) ? invoiceTaxes.reduce((sum: number, t: any) => sum + (t.amount || 0), 0) : 0))}</td>
+        </tr>
+        `
+            : ''
+        }
+        <tr style="border-top: 2px solid #e5e7eb; margin-top: 8px;">
+          <td style="padding: 12px 0 8px 0; color: #1a1a1a;"><strong>Total Amount:</strong></td>
+          <td style="padding: 12px 0 8px 0; text-align: right; color: #1a1a1a; font-size: 18px; font-weight: bold;">${formattedTotal}</td>
         </tr>
       </table>
     </div>
