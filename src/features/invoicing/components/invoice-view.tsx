@@ -15,7 +15,8 @@ import {
   IconX,
   IconCurrencyDollar,
   IconNotes,
-  IconBell
+  IconBell,
+  IconDeviceMobile
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +30,8 @@ import {
   useInvoiceEmailLogs,
   useGenerateShareLink,
   useSendInvoiceEmail,
-  useSendInvoiceReminder
+  useSendInvoiceReminder,
+  useSendInvoiceSMS
 } from '../hooks/use-invoice-actions';
 import { useStripeConnectStatus } from '../hooks/use-stripe';
 import {
@@ -39,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -64,6 +67,7 @@ export function InvoiceView() {
   const generateShareLink = useGenerateShareLink();
   const sendEmail = useSendInvoiceEmail();
   const sendReminder = useSendInvoiceReminder();
+  const sendSMS = useSendInvoiceSMS();
 
   const handleDownloadPDF = () => {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
@@ -115,6 +119,21 @@ export function InvoiceView() {
     }
   };
 
+  const handleSendSMS = async () => {
+    if (!invoice?.customer?.phone) {
+      toast.error('Customer does not have a phone number');
+      return;
+    }
+
+    try {
+      await sendSMS.mutateAsync(id);
+      invoiceQuery.refetch();
+    } catch (error) {
+      // Error is handled by the hook
+      console.error('Error sending SMS:', error);
+    }
+  };
+
   if (isLoading) {
     return <div className='p-4'>Loading...</div>;
   }
@@ -123,16 +142,18 @@ export function InvoiceView() {
     return <div className='p-4'>Invoice not found</div>;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const manualTax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  // Get custom tax from invoice taxes (new system)
-  // Handle both array and undefined/null cases
+  // Calculate invoice totals using utility function
+  const {
+    subtotal,
+    manualTax,
+    customTax,
+    totalTax,
+    total,
+    totalPaid,
+    balance
+  } = calculateInvoiceTotals(invoice);
+
+  // Get invoice taxes for display
   const invoiceTaxesRaw = (invoice as any)?.invoiceTaxes;
   let invoiceTaxes: any[] = [];
 
@@ -141,17 +162,6 @@ export function InvoiceView() {
   } else if (invoiceTaxesRaw && typeof invoiceTaxesRaw === 'object') {
     invoiceTaxes = [invoiceTaxesRaw];
   }
-
-  const customTax = invoiceTaxes.reduce((sum: number, tax: any) => {
-    if (!tax || typeof tax !== 'object') return sum;
-    const amount = parseFloat(tax.amount) || 0;
-    return sum + amount;
-  }, 0);
-
-  const totalTax = manualTax + customTax;
-  const total = subtotal + totalTax;
-  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = total - totalPaid;
   const taxCalculationMethod = (invoice as any)?.taxCalculationMethod;
 
   // Get currency from invoice or organization default
@@ -206,6 +216,16 @@ export function InvoiceView() {
                 </Button>
               )}
             </>
+          )}
+          {invoice.customer?.phone && (
+            <Button
+              variant='default'
+              onClick={handleSendSMS}
+              disabled={sendSMS.isPending}
+            >
+              <IconDeviceMobile className='mr-2 h-4 w-4' />
+              {sendSMS.isPending ? 'Sending...' : 'Send SMS'}
+            </Button>
           )}
           <Button
             variant='outline'

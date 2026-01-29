@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendPaymentReminderEmail } from '@/lib/email';
+import {
+  sendSMS,
+  generatePaymentReminderSMS,
+  formatPhoneNumber,
+  isValidPhoneNumber
+} from '@/lib/sms';
+import { getInvoiceCurrency } from '@/lib/currency';
 import { randomBytes } from 'crypto';
 
 // Verify cron secret to prevent unauthorized access
@@ -541,6 +548,55 @@ async function sendReminderForInvoice(
         resendId: emailResult.id || null
       }
     });
+
+    // Send SMS if customer has phone number
+    if (invoice.customer.phone) {
+      try {
+        const formattedPhone = formatPhoneNumber(invoice.customer.phone);
+        if (isValidPhoneNumber(formattedPhone)) {
+          const currency = getInvoiceCurrency(invoice as any);
+
+          const smsMessage = generatePaymentReminderSMS({
+            customerName: invoice.customer.name,
+            invoiceNo: invoice.invoiceNo,
+            total: remainingBalance > 0 ? remainingBalance : total,
+            dueDate: invoice.dueDate,
+            invoiceUrl,
+            daysUntilDue,
+            daysOverdue,
+            reminderType,
+            currency,
+            organizationName: invoice.organization?.name
+          });
+
+          const smsResult = await sendSMS({
+            to: formattedPhone,
+            message: smsMessage,
+            invoiceId: invoice.id,
+            smsType: 'payment_reminder'
+          });
+
+          // Log the SMS
+          await prisma.smsLog.create({
+            data: {
+              invoiceId: invoice.id,
+              smsType: 'payment_reminder',
+              recipient: formattedPhone,
+              message: smsMessage,
+              status: smsResult.success ? 'sent' : 'failed',
+              twilioSid: smsResult.twilioSid,
+              errorMessage: smsResult.error
+            }
+          });
+        }
+      } catch (smsError) {
+        console.error(
+          `SMS sending failed for invoice ${invoice.id}:`,
+          smsError
+        );
+        // Don't fail the whole reminder if SMS fails
+      }
+    }
 
     // Update invoice reminder tracking
     await prisma.invoice.update({

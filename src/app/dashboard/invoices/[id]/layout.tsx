@@ -3,7 +3,6 @@
 import { usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useInvoice } from '@/features/invoicing/hooks/use-invoices';
-import { formatCurrency } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,13 +11,23 @@ import {
   IconLink,
   IconMail,
   IconCurrencyDollar,
-  IconBell
+  IconBell,
+  IconDeviceMobile
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { invoiceNavItems } from '@/config/invoice-nav-config';
+import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
+import {
+  useInvoiceEmailLogs,
+  useInvoiceSmsLogs,
+  useGenerateShareLink,
+  useSendInvoiceEmail,
+  useSendInvoiceReminder,
+  useSendInvoiceSMS
+} from '@/features/invoicing/hooks/use-invoice-actions';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
+import { getInvoiceSectionFromPathname } from '@/lib/pathname-utils';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -38,54 +47,29 @@ export default function InvoiceDetailLayout({
   const id = params?.id as string;
   const invoiceQuery = useInvoice(id);
   const { data: invoice, isLoading } = invoiceQuery;
-  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [isSendingReminder, setIsSendingReminder] = useState(false);
 
-  // Check Stripe Connect status
-  const { data: stripeStatus } = useQuery({
-    queryKey: ['stripe-connect-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/stripe/connect/status');
-      if (!response.ok) return null;
-      return response.json();
-    }
-  });
+  // Use existing hooks for data fetching and actions
+  const { data: stripeStatus } = useStripeConnectStatus();
+  const { data: emailLogs = [] } = useInvoiceEmailLogs(id);
+  const { data: smsLogs = [] } = useInvoiceSmsLogs(id);
 
-  // Fetch email logs for badge counts
-  const { data: emailLogs = [] } = useQuery({
-    queryKey: ['emailLogs', id],
-    queryFn: async () => {
-      const res = await fetch(`/api/invoices/${id}/email-logs`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!id
-  });
+  // Use existing mutation hooks for actions
+  const generateShareLink = useGenerateShareLink();
+  const sendEmail = useSendInvoiceEmail();
+  const sendReminder = useSendInvoiceReminder();
+  const sendSMS = useSendInvoiceSMS();
 
+  // Action handlers - simplified using hooks
   const handleDownloadPDF = () => {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
   };
 
   const handleShareLink = async () => {
     try {
-      setIsGeneratingLink(true);
-      const response = await fetch(`/api/invoices/${id}/share`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate share link');
-      }
-
-      const { shareUrl } = await response.json();
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Shareable link copied to clipboard!');
+      await generateShareLink.mutateAsync(id);
     } catch (error) {
-      toast.error('Failed to generate share link');
+      // Error is handled by the hook
       console.error('Error generating share link:', error);
-    } finally {
-      setIsGeneratingLink(false);
     }
   };
 
@@ -96,25 +80,11 @@ export default function InvoiceDetailLayout({
     }
 
     try {
-      setIsSendingEmail(true);
-      const response = await fetch(`/api/invoices/${id}/send-email`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send email');
-      }
-
-      toast.success('Invoice email sent successfully!');
+      await sendEmail.mutateAsync(id);
       invoiceQuery.refetch();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to send email'
-      );
+      // Error is handled by the hook
       console.error('Error sending email:', error);
-    } finally {
-      setIsSendingEmail(false);
     }
   };
 
@@ -130,25 +100,26 @@ export default function InvoiceDetailLayout({
     }
 
     try {
-      setIsSendingReminder(true);
-      const response = await fetch(`/api/invoices/${id}/send-reminder`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send reminder');
-      }
-
-      toast.success('Payment reminder sent successfully!');
+      await sendReminder.mutateAsync(id);
       invoiceQuery.refetch();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to send reminder'
-      );
+      // Error is handled by the hook
       console.error('Error sending reminder:', error);
-    } finally {
-      setIsSendingReminder(false);
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!invoice?.customer?.phone) {
+      toast.error('Customer does not have a phone number');
+      return;
+    }
+
+    try {
+      await sendSMS.mutateAsync(id);
+      invoiceQuery.refetch();
+    } catch (error) {
+      // Error is handled by the hook
+      console.error('Error sending SMS:', error);
     }
   };
 
@@ -175,33 +146,23 @@ export default function InvoiceDetailLayout({
     );
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  const total = subtotal + tax;
-  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = total - totalPaid;
+  // Calculate invoice totals using utility function
+  const { balance } = calculateInvoiceTotals(invoice);
 
-  // Get current section from pathname
-  // Pathname will be like /dashboard/invoices/[id]/details
-  const pathParts = pathname?.split('/').filter(Boolean) || [];
-  const lastPart = pathParts[pathParts.length - 1];
-  // If last part is the invoice id (numeric or matches our id), default to 'details'
-  const currentSection =
-    lastPart === id || !invoiceNavItems.some((item) => item.href === lastPart)
-      ? 'details'
-      : lastPart;
+  // Get current section from pathname using utility function
+  const validSections = invoiceNavItems.map((item) => item.href);
+  const currentSection = getInvoiceSectionFromPathname(
+    pathname,
+    id,
+    validSections
+  );
 
   // Helper function to get badge count
   const getBadgeCount = (badgeKey?: string): number | null => {
     if (!badgeKey) return null;
     if (badgeKey === 'payments.length') return invoice.payments.length;
     if (badgeKey === 'emailLogs.length') return emailLogs.length;
+    if (badgeKey === 'smsLogs.length') return smsLogs.length;
     if (badgeKey === 'reminderCount') return invoice.reminderCount ?? 0;
     return null;
   };
@@ -234,32 +195,42 @@ export default function InvoiceDetailLayout({
           {invoice.customer?.email && (
             <>
               <Button
-                variant='default'
+                variant='outline'
                 onClick={handleSendEmail}
-                disabled={isSendingEmail}
+                disabled={sendEmail.isPending}
               >
                 <IconMail className='mr-2 h-4 w-4' />
-                {isSendingEmail ? 'Sending...' : 'Send Email'}
+                {sendEmail.isPending ? 'Sending...' : 'Send Email'}
               </Button>
               {invoice.status !== 'paid' && (
                 <Button
                   variant='outline'
                   onClick={handleSendReminder}
-                  disabled={isSendingReminder}
+                  disabled={sendReminder.isPending}
                 >
                   <IconBell className='mr-2 h-4 w-4' />
-                  {isSendingReminder ? 'Sending...' : 'Send Reminder'}
+                  {sendReminder.isPending ? 'Sending...' : 'Send Reminder'}
                 </Button>
               )}
             </>
           )}
+          {invoice.customer?.phone && (
+            <Button
+              variant='outline'
+              onClick={handleSendSMS}
+              disabled={sendSMS.isPending}
+            >
+              <IconDeviceMobile className='mr-2 h-4 w-4' />
+              {sendSMS.isPending ? 'Sending...' : 'Send SMS'}
+            </Button>
+          )}
           <Button
             variant='outline'
             onClick={handleShareLink}
-            disabled={isGeneratingLink}
+            disabled={generateShareLink.isPending}
           >
             <IconLink className='mr-2 h-4 w-4' />
-            {isGeneratingLink ? 'Generating...' : 'Share Link'}
+            {generateShareLink.isPending ? 'Generating...' : 'Share Link'}
           </Button>
           <Button variant='outline' onClick={handleDownloadPDF}>
             <IconDownload className='mr-2 h-4 w-4' /> Download PDF
@@ -273,9 +244,9 @@ export default function InvoiceDetailLayout({
       </div>
 
       {/* Main layout: left sidebar + right content */}
-      <div className='flex min-h-[calc(100vh-12rem)] gap-6'>
+      <div className='flex h-[calc(100vh-8rem)] gap-6'>
         {/* Left Sidebar Navigation */}
-        <aside className='bg-background w-64 shrink-0 border-r'>
+        <aside className='bg-background w-64 shrink-0 overflow-y-auto border-r'>
           <div className='p-6'>
             <h3 className='text-muted-foreground mb-6 text-xs font-semibold tracking-wide uppercase'>
               Sections
@@ -307,6 +278,8 @@ export default function InvoiceDetailLayout({
                           item.href === 'payments' &&
                             'bg-emerald-100 text-emerald-700',
                           item.href === 'emails' && 'bg-blue-100 text-blue-700',
+                          item.href === 'sms' &&
+                            'bg-purple-100 text-purple-700',
                           item.href === 'reminders' &&
                             'bg-orange-100 text-orange-700'
                         )}
@@ -322,7 +295,7 @@ export default function InvoiceDetailLayout({
         </aside>
 
         {/* Main Content */}
-        <main className='flex-1 overflow-auto'>{children}</main>
+        <main className='flex-1 overflow-y-auto'>{children}</main>
       </div>
     </div>
   );

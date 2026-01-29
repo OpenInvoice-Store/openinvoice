@@ -38,6 +38,7 @@ import { useEffect } from 'react';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { formatCurrency } from '@/lib/format';
 import { CURRENCIES } from '@/lib/currency';
+import { calculateItemTotals } from '@/lib/invoice-calculations';
 import { useBrandingSettings } from '../hooks/use-branding';
 
 const recurringInvoiceItemSchema = z.object({
@@ -167,15 +168,7 @@ export function RecurringInvoiceForm() {
 
   const calculateTotals = () => {
     const items = form.watch('templateItems');
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    const tax = items.reduce(
-      (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-      0
-    );
-    return { subtotal, tax, total: subtotal + tax };
+    return calculateItemTotals(items);
   };
 
   const onSubmit = async (data: RecurringInvoiceFormData) => {

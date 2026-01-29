@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentsList } from '@/features/invoicing/components/payments-list';
 import { PaymentForm } from '@/features/invoicing/components/payment-form';
 import { StripePaymentForm } from '@/features/invoicing/components/stripe-payment-form';
-import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
+import { useInvoiceEmailLogs } from '@/features/invoicing/hooks/use-invoice-actions';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 import {
   Dialog,
   DialogContent,
@@ -26,26 +28,9 @@ export default function InvoicePaymentsPage() {
   const { data: invoice, isLoading } = invoiceQuery;
   const [showStripePayment, setShowStripePayment] = useState(false);
 
-  // Check Stripe Connect status
-  const { data: stripeStatus } = useQuery({
-    queryKey: ['stripe-connect-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/stripe/connect/status');
-      if (!response.ok) return null;
-      return response.json();
-    }
-  });
-
-  // Fetch email logs for refetch
-  const { refetch: refetchEmailLogs } = useQuery({
-    queryKey: ['emailLogs', id],
-    queryFn: async () => {
-      const res = await fetch(`/api/invoices/${id}/email-logs`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!id
-  });
+  // Use existing hooks for data fetching
+  const { data: stripeStatus } = useStripeConnectStatus();
+  const { refetch: refetchEmailLogs } = useInvoiceEmailLogs(id);
 
   if (isLoading) {
     return <div className='p-4'>Loading...</div>;
@@ -55,17 +40,8 @@ export default function InvoicePaymentsPage() {
     return <div className='p-4'>Invoice not found</div>;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  const total = subtotal + tax;
-  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = total - totalPaid;
+  // Calculate invoice totals using utility function
+  const { balance } = calculateInvoiceTotals(invoice);
   const currency = getInvoiceCurrency(
     invoice as any,
     (invoice as any).organization?.defaultCurrency

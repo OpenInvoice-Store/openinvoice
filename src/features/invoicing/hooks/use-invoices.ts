@@ -41,6 +41,7 @@ export interface Invoice {
     id: string;
     name: string;
     email?: string | null;
+    phone?: string | null;
   };
   items: InvoiceItem[];
   payments: Payment[];

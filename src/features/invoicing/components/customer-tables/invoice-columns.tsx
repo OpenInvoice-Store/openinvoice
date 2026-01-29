@@ -9,6 +9,7 @@ import { getInvoiceCurrency } from '@/lib/currency';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Invoice } from '@/features/invoicing/hooks/use-customers';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -27,15 +28,9 @@ const calculateTotal = (invoice: Invoice) => {
     return 0;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  return subtotal + tax;
+  // Use utility function for consistent calculations
+  const { total } = calculateInvoiceTotals(invoice as any);
+  return total;
 };
 
 export const customerInvoiceColumns: ColumnDef<Invoice>[] = [

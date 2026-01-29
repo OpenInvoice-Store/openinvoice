@@ -70,6 +70,7 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   emailLogs      EmailLog[]
+  smsLogs        SmsLog[]
   paymentPlan    PaymentPlan?
 
   // Payment reminder tracking
@@ -255,6 +256,26 @@ model EmailLog {
   @@index([sentAt])
   @@index([resendId])
   @@map("email_logs")
+}
+
+model SmsLog {
+  id           String   @id @default(cuid())
+  invoice      Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId    String?
+  smsType      String   // 'invoice', 'payment_confirmation', or 'payment_reminder'
+  recipient    String   // Phone number
+  message      String   // SMS message content
+  status       String   @default("sent") // 'sent', 'delivered', 'failed', 'pending'
+  twilioSid    String?  // Twilio Message SID
+  errorMessage String?
+  sentAt       DateTime @default(now())
+  deliveredAt DateTime?
+
+  @@index([invoiceId])
+  @@index([recipient])
+  @@index([status])
+  @@index([sentAt])
+  @@map("sms_logs")
 }
 
 model EmailEvent {

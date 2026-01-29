@@ -3,6 +3,13 @@ import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmationEmail } from '@/lib/email';
 import {
+  sendSMS,
+  generatePaymentConfirmationSMS,
+  formatPhoneNumber,
+  isValidPhoneNumber
+} from '@/lib/sms';
+import { getInvoiceCurrency } from '@/lib/currency';
+import {
   applyPaymentToInstallments,
   updateInvoiceStatusFromPaymentPlan
 } from '@/lib/payment-plan';
@@ -254,6 +261,62 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       });
     } catch (emailError) {
       console.error('Error sending payment confirmation email:', emailError);
+    }
+  }
+
+  // Send payment confirmation SMS
+  if (invoiceWithRelations.customer.phone) {
+    try {
+      const formattedPhone = formatPhoneNumber(
+        invoiceWithRelations.customer.phone
+      );
+      if (isValidPhoneNumber(formattedPhone)) {
+        let shareToken = invoiceWithRelations.shareToken;
+        if (!shareToken) {
+          const { randomBytes } = await import('crypto');
+          shareToken = randomBytes(32).toString('base64url');
+          await prisma.invoice.update({
+            where: { id: invoiceId },
+            data: { shareToken }
+          });
+        }
+
+        const baseUrl =
+          process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const invoiceUrl = `${baseUrl}/invoice/${shareToken}`;
+        const currency = getInvoiceCurrency(invoiceWithRelations as any);
+
+        const smsMessage = generatePaymentConfirmationSMS({
+          customerName: invoiceWithRelations.customer.name,
+          invoiceNo: invoiceWithRelations.invoiceNo,
+          amount: payment.amount,
+          invoiceUrl,
+          currency,
+          organizationName: invoiceWithRelations.organization?.name
+        });
+
+        const smsResult = await sendSMS({
+          to: formattedPhone,
+          message: smsMessage,
+          invoiceId,
+          smsType: 'payment_confirmation'
+        });
+
+        await prisma.smsLog.create({
+          data: {
+            invoiceId,
+            smsType: 'payment_confirmation',
+            recipient: formattedPhone,
+            message: smsMessage,
+            status: smsResult.success ? 'sent' : 'failed',
+            twilioSid: smsResult.twilioSid,
+            errorMessage: smsResult.error
+          }
+        });
+      }
+    } catch (smsError) {
+      console.error('Error sending payment confirmation SMS:', smsError);
+      // Don't fail the webhook if SMS fails
     }
   }
 }

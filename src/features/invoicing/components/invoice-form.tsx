@@ -34,8 +34,9 @@ import { useParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { formatCurrency } from '@/lib/format';
-import { useQuery } from '@tanstack/react-query';
 import { useBrandingSettings } from '../hooks/use-branding';
+import { useInvoiceTemplates } from '../hooks/use-templates';
+import { useTaxProfiles } from '../hooks/use-tax-profiles';
 import { CURRENCIES } from '@/lib/currency';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -74,26 +75,8 @@ export function InvoiceForm() {
   const { data: customers } = useCustomers();
   const { data: products } = useProducts();
   const { data: branding } = useBrandingSettings();
-  const { data: templates = [] } = useQuery<
-    Array<{ id: string; name: string; isDefault: boolean }>
-  >({
-    queryKey: ['invoice-templates'],
-    queryFn: async () => {
-      const res = await fetch('/api/invoice-templates');
-      if (!res.ok) throw new Error('Failed to fetch templates');
-      return res.json();
-    }
-  });
-
-  // Fetch tax profiles
-  const { data: taxProfiles = [] } = useQuery({
-    queryKey: ['tax-profiles'],
-    queryFn: async () => {
-      const response = await fetch('/api/tax/profiles');
-      if (!response.ok) return [];
-      return response.json();
-    }
-  });
+  const { data: templates = [] } = useInvoiceTemplates();
+  const { data: taxProfiles = [] } = useTaxProfiles();
 
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();

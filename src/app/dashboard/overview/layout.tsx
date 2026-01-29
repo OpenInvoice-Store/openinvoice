@@ -13,18 +13,12 @@ import React from 'react';
 import { formatCurrency } from '@/lib/format';
 import { prisma } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 function calculateInvoiceTotal(invoice: any): number {
-  const subtotal = invoice.items.reduce(
-    (sum: number, item: any) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = invoice.items.reduce(
-    (sum: number, item: any) =>
-      sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  return subtotal + tax;
+  // Use utility function for consistent calculations
+  const { total } = calculateInvoiceTotals(invoice);
+  return total;
 }
 
 async function getDashboardStats() {

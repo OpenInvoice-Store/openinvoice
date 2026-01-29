@@ -14,6 +14,7 @@ import {
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getInvoiceCurrency } from '@/lib/currency';
 import { CellAction } from './cell-action';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -41,22 +42,9 @@ const calculateTotal = (invoice: Invoice) => {
     return 0;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  // Manual tax from item taxRate
-  const manualTax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  // Custom tax from invoice taxes (tax profile)
-  const customTax =
-    (invoice as any).invoiceTaxes?.reduce(
-      (sum: number, tax: any) => sum + tax.amount,
-      0
-    ) || 0;
-  return subtotal + manualTax + customTax;
+  // Use utility function for consistent calculations
+  const { total } = calculateInvoiceTotals(invoice);
+  return total;
 };
 
 export const columns: ColumnDef<Invoice>[] = [

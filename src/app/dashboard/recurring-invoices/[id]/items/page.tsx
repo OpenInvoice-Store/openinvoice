@@ -12,6 +12,7 @@ import {
 } from '@/features/invoicing/hooks/use-recurring-invoices';
 import { useProducts } from '@/features/invoicing/hooks/use-products';
 import { formatCurrency } from '@/lib/format';
+import { calculateItemTotals } from '@/lib/invoice-calculations';
 import {
   Card,
   CardContent,
@@ -159,16 +160,7 @@ export default function RecurringInvoiceItemsPage() {
     ? form.watch('items')
     : (JSON.parse(template.templateItems) as RecurringInvoiceTemplateItem[]);
 
-  const subtotal = items.reduce(
-    (sum: number, item: any) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = items.reduce(
-    (sum: number, item: any) =>
-      sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  const total = subtotal + tax;
+  const { subtotal, tax, total } = calculateItemTotals(items);
 
   return (
     <div className='space-y-6 p-6'>
