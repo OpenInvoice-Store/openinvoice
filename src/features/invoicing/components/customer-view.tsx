@@ -33,6 +33,7 @@ import {
 } from '@tanstack/react-table';
 import { customerInvoiceColumns } from './customer-tables/invoice-columns';
 import { customerPaymentColumns } from './customer-tables/payment-columns';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 type CustomerSection = 'details' | 'payments' | 'payment-methods';
 
@@ -117,16 +118,8 @@ export function CustomerView() {
   );
   const totalInvoices = invoices.length;
   const totalInvoiceAmount = invoices.reduce((sum, invoice) => {
-    const subtotal = invoice.items.reduce(
-      (itemSum, item) => itemSum + item.price * item.quantity,
-      0
-    );
-    const tax = invoice.items.reduce(
-      (itemSum, item) =>
-        itemSum + item.price * item.quantity * (item.taxRate / 100),
-      0
-    );
-    return sum + subtotal + tax;
+    const { total } = calculateInvoiceTotals(invoice as any);
+    return sum + total;
   }, 0);
 
   return (

@@ -3,6 +3,7 @@ import {
   IconCurrencyDollar,
   IconMail,
   IconBell,
+  IconDeviceMobile,
   type TablerIcon
 } from '@tabler/icons-react';
 
@@ -36,6 +37,12 @@ export const invoiceNavItems: InvoiceNavItem[] = [
     href: 'emails',
     icon: IconMail,
     badgeKey: 'emailLogs.length'
+  },
+  {
+    title: 'SMS',
+    href: 'sms',
+    icon: IconDeviceMobile,
+    badgeKey: 'smsLogs.length'
   },
   {
     title: 'Reminders',

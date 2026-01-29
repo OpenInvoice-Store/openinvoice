@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { useInvoiceEmailLogs } from '@/features/invoicing/hooks/use-invoice-actions';
 
 export default function InvoiceEmailsPage() {
   const params = useParams();
@@ -14,16 +14,8 @@ export default function InvoiceEmailsPage() {
   const invoiceQuery = useInvoice(id);
   const { data: invoice, isLoading } = invoiceQuery;
 
-  // Fetch email logs
-  const { data: emailLogs = [] } = useQuery({
-    queryKey: ['emailLogs', id],
-    queryFn: async () => {
-      const res = await fetch(`/api/invoices/${id}/email-logs`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!id
-  });
+  // Use existing hook for email logs
+  const { data: emailLogs = [] } = useInvoiceEmailLogs(id);
 
   if (isLoading) {
     return <div className='p-4'>Loading...</div>;

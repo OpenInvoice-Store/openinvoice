@@ -20,6 +20,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -36,35 +37,24 @@ interface InvoicePublicViewProps {
 export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
   const [showStripePayment, setShowStripePayment] = useState(false);
 
-  const subtotal = invoice.items.reduce(
-    (sum: number, item: any) => sum + item.price * item.quantity,
-    0
-  );
-  const manualTax = invoice.items.reduce(
-    (sum: number, item: any) =>
-      sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  // Get custom tax from invoice taxes (new system)
-  // Handle both array and undefined/null cases
+  // Calculate invoice totals using utility function
+  const {
+    subtotal,
+    manualTax,
+    customTax,
+    totalTax,
+    total,
+    totalPaid,
+    balance
+  } = calculateInvoiceTotals(invoice as any);
+
+  // Get invoice taxes for display
   const invoiceTaxesRaw = (invoice as any).invoiceTaxes;
   const invoiceTaxes = Array.isArray(invoiceTaxesRaw)
     ? invoiceTaxesRaw
     : invoiceTaxesRaw
       ? [invoiceTaxesRaw]
       : [];
-  const customTax = invoiceTaxes.reduce((sum: number, tax: any) => {
-    const amount =
-      typeof tax === 'object' && tax !== null ? tax.amount || 0 : 0;
-    return sum + amount;
-  }, 0);
-  const totalTax = manualTax + customTax;
-  const total = subtotal + totalTax;
-  const totalPaid = invoice.payments.reduce(
-    (sum: number, p: any) => sum + p.amount,
-    0
-  );
-  const balance = total - totalPaid;
   const taxCalculationMethod = (invoice as any).taxCalculationMethod;
 
   // Get currency from invoice or organization default

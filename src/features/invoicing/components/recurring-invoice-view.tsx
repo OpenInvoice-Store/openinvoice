@@ -31,6 +31,10 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/format';
 import { format } from 'date-fns';
 import { getInvoiceCurrency } from '@/lib/currency';
+import {
+  calculateItemTotals,
+  calculateInvoiceTotals
+} from '@/lib/invoice-calculations';
 import Link from 'next/link';
 import {
   Table,
@@ -59,16 +63,7 @@ export function RecurringInvoiceView() {
   }
 
   const items = JSON.parse(template.templateItems);
-  const subtotal = items.reduce(
-    (sum: number, item: any) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = items.reduce(
-    (sum: number, item: any) =>
-      sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  const total = subtotal + tax;
+  const { total } = calculateItemTotals(items);
 
   // Get currency from template or organization default
   const currency = getInvoiceCurrency(
@@ -82,18 +77,11 @@ export function RecurringInvoiceView() {
   // Calculate statistics from generated invoices
   const invoices = template.invoices || [];
   const totalRevenue = invoices.reduce((sum: number, inv: any) => {
-    const invSubtotal =
-      inv.items?.reduce(
-        (s: number, item: any) => s + item.price * item.quantity,
-        0
-      ) || 0;
-    const invTax =
-      inv.items?.reduce(
-        (s: number, item: any) =>
-          s + item.price * item.quantity * (item.taxRate / 100),
-        0
-      ) || 0;
-    return sum + invSubtotal + invTax;
+    if (!inv.items || !Array.isArray(inv.items) || inv.items.length === 0) {
+      return sum;
+    }
+    const { total: invTotal } = calculateInvoiceTotals(inv);
+    return sum + invTotal;
   }, 0);
   const totalPaid = invoices.reduce((sum: number, inv: any) => {
     return (

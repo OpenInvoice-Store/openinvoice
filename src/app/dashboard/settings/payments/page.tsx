@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TaxProfileSettings } from '@/features/invoicing/components/tax-profile-settings';
+import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
 
 interface StripeConnectStatus {
   connected: boolean;
@@ -91,24 +92,11 @@ export default function PaymentsSettingsPage() {
     enabled: !!organization
   });
 
-  // Fetch Stripe Connect status
+  // Use existing hook for Stripe Connect status
+  // Note: The hook has built-in polling, but this page needs custom polling logic
+  // So we'll keep a custom query here for the specific refetchInterval behavior
   const { data: stripeStatus, isLoading: isLoadingStatus } =
-    useQuery<StripeConnectStatus>({
-      queryKey: ['stripe-connect-status'],
-      queryFn: async () => {
-        const response = await fetch('/api/stripe/connect/status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch Stripe status');
-        }
-        return response.json();
-      },
-      enabled: !!organization,
-      refetchInterval: (query) => {
-        // Only poll when connecting or status is pending/incomplete
-        const status = query.state.data?.status;
-        return status === 'pending' || status === 'incomplete' ? 10000 : false; // Poll every 10 seconds when pending, otherwise disable
-      }
-    });
+    useStripeConnectStatus(!!organization);
 
   // Connect Stripe mutation
   const connectMutation = useMutation({

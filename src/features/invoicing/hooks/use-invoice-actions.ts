@@ -23,6 +23,31 @@ export function useInvoiceEmailLogs(invoiceId: string) {
   });
 }
 
+export interface SmsLog {
+  id: string;
+  invoiceId: string;
+  recipient: string;
+  message: string;
+  status: string;
+  smsType: string;
+  twilioSid?: string | null;
+  errorMessage?: string | null;
+  sentAt: string;
+  deliveredAt?: string | null;
+}
+
+export function useInvoiceSmsLogs(invoiceId: string) {
+  return useQuery<SmsLog[]>({
+    queryKey: ['smsLogs', invoiceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/invoices/${invoiceId}/sms-logs`);
+      if (!res.ok) throw new Error('Failed to fetch SMS logs');
+      return res.json();
+    },
+    enabled: !!invoiceId
+  });
+}
+
 export function useGenerateShareLink() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -96,6 +121,31 @@ export function useSendInvoiceReminder() {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to send reminder');
+    }
+  });
+}
+
+export function useSendInvoiceSMS() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const response = await fetch(`/api/invoices/${invoiceId}/send-sms`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send SMS');
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, invoiceId) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      toast.success('Invoice SMS sent successfully!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to send SMS');
     }
   });
 }

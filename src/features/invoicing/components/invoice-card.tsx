@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from '@/lib/format';
 import { getInvoiceCurrency } from '@/lib/currency';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 interface InvoiceCardProps {
   invoice: Invoice;
@@ -75,16 +76,9 @@ export function InvoiceCard({ invoice, isOverlay }: InvoiceCardProps) {
   });
 
   const totalAmount = useMemo(() => {
-    const subtotal = invoice.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    const tax = invoice.items.reduce(
-      (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-      0
-    );
-    return subtotal + tax;
-  }, [invoice.items]);
+    const { total } = calculateInvoiceTotals(invoice);
+    return total;
+  }, [invoice]);
 
   const currency = useMemo(() => {
     return getInvoiceCurrency(

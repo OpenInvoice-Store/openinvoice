@@ -6,6 +6,7 @@ import { formatDate, formatCurrency } from '@/lib/format';
 import { getInvoiceCurrency } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentPlanSection } from '@/features/invoicing/components/payment-plan-section';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 export default function InvoiceDetailsPage() {
   const params = useParams();
@@ -21,12 +22,18 @@ export default function InvoiceDetailsPage() {
     return <div className='p-4'>Invoice not found</div>;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
+  // Calculate invoice totals using utility function
+  const {
+    subtotal,
+    manualTax,
+    customTax,
+    totalTax,
+    total,
+    totalPaid,
+    balance
+  } = calculateInvoiceTotals(invoice);
 
-  // Get custom tax from invoice taxes (new system)
+  // Get invoice taxes for display
   const invoiceTaxesRaw = (invoice as any)?.invoiceTaxes;
   let invoiceTaxes: any[] = [];
 
@@ -35,25 +42,6 @@ export default function InvoiceDetailsPage() {
   } else if (invoiceTaxesRaw && typeof invoiceTaxesRaw === 'object') {
     invoiceTaxes = [invoiceTaxesRaw];
   }
-
-  // Calculate custom tax from invoiceTaxes
-  const customTax = invoiceTaxes.reduce((sum: number, tax: any) => {
-    if (!tax || typeof tax !== 'object') return sum;
-    const amount = parseFloat(tax.amount) || 0;
-    return sum + amount;
-  }, 0);
-
-  // Legacy manual tax calculation (from item.taxRate)
-  const manualTax = invoice.items.reduce(
-    (sum, item) =>
-      sum + item.price * item.quantity * ((item.taxRate || 0) / 100),
-    0
-  );
-
-  const totalTax = manualTax + customTax;
-  const total = subtotal + totalTax;
-  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = total - totalPaid;
   const currency = getInvoiceCurrency(
     invoice as any,
     (invoice as any).organization?.defaultCurrency
@@ -61,7 +49,8 @@ export default function InvoiceDetailsPage() {
   const taxCalculationMethod = (invoice as any)?.taxCalculationMethod;
 
   return (
-    <div className='space-y-6 p-6'>
+    // scrollable container
+    <div className='space-y-6 overflow-y-auto p-6'>
       <div className='grid gap-4 md:grid-cols-2'>
         <Card>
           <CardHeader>
