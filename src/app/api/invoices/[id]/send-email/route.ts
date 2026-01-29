@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { sendInvoiceEmail } from '@/lib/email';
 import { randomBytes } from 'crypto';
+import { getInvoiceCurrency } from '@/lib/currency';
 
 export async function POST(
   request: NextRequest,
@@ -36,7 +37,8 @@ export async function POST(
             companyPhone: true,
             companyEmail: true,
             companyWebsite: true,
-            footerText: true
+            footerText: true,
+            defaultCurrency: true
           }
         },
         items: {
@@ -137,10 +139,12 @@ export async function POST(
           amount: tax.amount,
           authority: tax.authority || undefined
         })),
-        currency:
-          (invoice as any).currency ||
-          invoice.organization?.defaultCurrency ||
-          'USD',
+        currency: getInvoiceCurrency(
+          invoice as {
+            currency?: string | null;
+            organization?: { defaultCurrency?: string };
+          }
+        ),
         organizationName: invoice.organization?.name,
         branding: branding
       });

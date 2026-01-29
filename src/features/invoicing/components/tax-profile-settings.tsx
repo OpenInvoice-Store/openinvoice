@@ -179,7 +179,7 @@ export function TaxProfileSettings() {
     const profileData = {
       name: editingProfile.name,
       countryCode: editingProfile.countryCode,
-      regionCode: editingProfile.regionCode || null,
+      regionCode: editingProfile.regionCode || undefined,
       isDefault: editingProfile.isDefault,
       taxRules: editingProfile.taxRules
     };
