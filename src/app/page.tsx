@@ -17,7 +17,14 @@ import {
   Building2,
   Receipt,
   TrendingUp,
-  CheckCircle2
+  CheckCircle2,
+  Repeat,
+  Palette,
+  Globe,
+  Calculator,
+  Download,
+  PieChart,
+  MessageSquare
 } from 'lucide-react';
 
 export default async function Page() {
@@ -226,6 +233,69 @@ export default async function Page() {
                   payments, and comprehensive security measures.
                 </p>
               </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Repeat className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  Recurring Invoices
+                </h3>
+                <p className='text-muted-foreground'>
+                  Automated recurring invoices and subscription management with
+                  flexible scheduling, usage-based billing, and automatic
+                  generation.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Palette className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  Branding & Templates
+                </h3>
+                <p className='text-muted-foreground'>
+                  Customize your company branding with logos, colors, and fonts.
+                  Create multiple invoice templates with custom layouts and
+                  styling.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Globe className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>Multi-Currency</h3>
+                <p className='text-muted-foreground'>
+                  Support for 20+ currencies including USD, EUR, GBP, JPY, CAD,
+                  and more. Set default currency per organization and invoice.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <Calculator className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  Custom Tax System
+                </h3>
+                <p className='text-muted-foreground'>
+                  Flexible tax calculation with tax profiles, multiple tax
+                  rules, and presets for common regions. Support for GST, VAT,
+                  PST, and more.
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <PieChart className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  Advanced Analytics
+                </h3>
+                <p className='text-muted-foreground'>
+                  Custom report builder, financial forecasting, customer
+                  lifetime value analysis, and export capabilities (CSV, Excel,
+                  PDF).
+                </p>
+              </div>
+              <div className='bg-card rounded-lg border p-6'>
+                <MessageSquare className='text-primary mb-4 h-8 w-8' />
+                <h3 className='mb-2 text-xl font-semibold'>
+                  SMS Notifications
+                </h3>
+                <p className='text-muted-foreground'>
+                  Send invoice notifications, payment confirmations, and payment
+                  reminders via SMS with Twilio integration and complete SMS
+                  history tracking.
+                </p>
+              </div>
             </div>
           </div>
         </section>
@@ -243,11 +313,28 @@ export default async function Page() {
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                 <div className='bg-background rounded-lg border p-4'>
                   <div className='flex items-start gap-3'>
-                    <TrendingUp className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <Mail className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
                     <div>
-                      <h3 className='mb-1 font-semibold'>Recurring Invoices</h3>
+                      <h3 className='mb-1 font-semibold'>
+                        Branded Email Templates
+                      </h3>
                       <p className='text-muted-foreground text-sm'>
-                        Automated recurring invoices and subscription management
+                        Custom email templates using your company branding
+                        settings for a consistent brand experience
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className='bg-background rounded-lg border p-4'>
+                  <div className='flex items-start gap-3'>
+                    <Shield className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
+                    <div>
+                      <h3 className='mb-1 font-semibold'>
+                        Payment Dispute Management
+                      </h3>
+                      <p className='text-muted-foreground text-sm'>
+                        Handle payment disputes, chargebacks, and refunds with
+                        automated workflows and tracking
                       </p>
                     </div>
                   </div>
@@ -257,35 +344,11 @@ export default async function Page() {
                     <CheckCircle2 className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
                     <div>
                       <h3 className='mb-1 font-semibold'>
-                        Branding & Templates
+                        Compliance Reporting
                       </h3>
                       <p className='text-muted-foreground text-sm'>
-                        Custom branding, invoice templates, and branded email
-                        templates
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className='bg-background rounded-lg border p-4'>
-                  <div className='flex items-start gap-3'>
-                    <TrendingUp className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
-                    <div>
-                      <h3 className='mb-1 font-semibold'>Multi-Currency</h3>
-                      <p className='text-muted-foreground text-sm'>
-                        Support for multiple currencies and international
-                        payments
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className='bg-background rounded-lg border p-4'>
-                  <div className='flex items-start gap-3'>
-                    <BarChart3 className='text-primary mt-1 h-5 w-5 flex-shrink-0' />
-                    <div>
-                      <h3 className='mb-1 font-semibold'>Advanced Analytics</h3>
-                      <p className='text-muted-foreground text-sm'>
-                        Custom report builder, financial forecasting, and export
-                        capabilities
+                        Generate compliance reports for GDPR, PCI-DSS, and other
+                        regulatory requirements
                       </p>
                     </div>
                   </div>
