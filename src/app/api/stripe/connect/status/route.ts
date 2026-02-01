@@ -33,12 +33,13 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+      const org = organization as any;
       // Retrieve account from Stripe
       const account = await stripe.accounts.retrieve(
         organization.stripeAccountId
       );
 
-      // Update organization with latest status
+      // Derive latest status from Stripe
       const isComplete = account.details_submitted && account.charges_enabled;
       const status = isComplete
         ? 'active'
@@ -46,24 +47,30 @@ export async function GET(request: NextRequest) {
           ? 'pending'
           : 'incomplete';
 
+      // Preserve manual disconnects using same semantics as the webhook:
+      const wasEverComplete = org.stripeOnboardingComplete;
+      const currentlyEnabled = org.stripeConnectEnabled;
+      const shouldEnable = isComplete && (currentlyEnabled || !wasEverComplete);
+
       await prisma.organization.update({
         where: { id: orgId },
         data: {
           stripeAccountStatus: status,
-          stripeConnectEnabled: isComplete,
-          stripeOnboardingComplete: isComplete,
-          stripeAccountEmail: account.email || organization.stripeAccountEmail
+          stripeConnectEnabled: shouldEnable,
+          stripeOnboardingComplete: wasEverComplete || isComplete,
+          stripeAccountEmail: account.email || org.stripeAccountEmail
         }
       });
 
       return NextResponse.json({
-        connected: true,
+        connected: !!organization.stripeAccountId,
         accountId: account.id,
         status,
         email: account.email,
         detailsSubmitted: account.details_submitted,
         chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled
+        payoutsEnabled: account.payouts_enabled,
+        connectEnabled: shouldEnable
       });
     } catch (error: any) {
       // If account doesn't exist or was deleted
@@ -73,13 +80,15 @@ export async function GET(request: NextRequest) {
           data: {
             stripeAccountId: null,
             stripeConnectEnabled: false,
-            stripeAccountStatus: null
+            stripeAccountStatus: null,
+            stripeOnboardingComplete: false
           }
         });
 
         return NextResponse.json({
           connected: false,
-          status: null
+          status: null,
+          connectEnabled: false
         });
       }
 

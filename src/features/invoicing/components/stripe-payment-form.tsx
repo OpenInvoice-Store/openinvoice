@@ -169,6 +169,12 @@ function PaymentFormContent({
         onReady={handlePaymentElementReady}
       />
 
+      <p className='text-muted-foreground pt-2 text-xs'>
+        Card details are securely handled by Stripe. For faster checkout, Stripe
+        may save this card to your profile for future payments with this
+        organization.
+      </p>
+
       <div className='flex gap-2 pt-4'>
         <Button
           type='submit'

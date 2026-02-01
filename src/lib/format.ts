@@ -1,3 +1,5 @@
+import { formatCurrencyAmount } from './currency';
+
 export function formatDate(
   date: Date | string | number | undefined,
   opts: Intl.DateTimeFormatOptions = {}
@@ -16,9 +18,11 @@ export function formatDate(
   }
 }
 
+/**
+ * Format currency amount
+ * @deprecated Use formatCurrencyAmount from '@/lib/currency' for better multi-currency support
+ * This function is kept for backward compatibility
+ */
 export function formatCurrency(amount: number, currency: string = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount);
+  return formatCurrencyAmount(amount, currency);
 }

@@ -8,8 +8,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Invoice, useDeleteInvoice } from '@/features/invoicing/hooks/use-invoices';
-import { IconEdit, IconDotsVertical, IconTrash, IconEye, IconLink } from '@tabler/icons-react';
+import {
+  Invoice,
+  useDeleteInvoice
+} from '@/features/invoicing/hooks/use-invoices';
+import {
+  IconEdit,
+  IconDotsVertical,
+  IconTrash,
+  IconEye,
+  IconLink
+} from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -42,13 +51,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     try {
       setIsGeneratingLink(true);
       const response = await fetch(`/api/invoices/${data.id}/share`, {
-        method: 'POST',
+        method: 'POST'
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate share link');
       }
-      
+
       const { shareUrl } = await response.json();
       await navigator.clipboard.writeText(shareUrl);
       toast.success('Shareable link copied to clipboard!');
@@ -70,7 +79,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       />
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button variant='ghost' className='h-8 w-8 p-0'>
+          <Button variant='ghost' className='h-8 w-8 p-0' data-no-row-click>
             <span className='sr-only'>Open menu</span>
             <IconDotsVertical className='h-4 w-4' />
           </Button>
@@ -86,7 +95,7 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             onClick={handleShareLink}
             disabled={isGeneratingLink}
           >
-            <IconLink className='mr-2 h-4 w-4' /> 
+            <IconLink className='mr-2 h-4 w-4' />
             {isGeneratingLink ? 'Generating...' : 'Share Link'}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -102,4 +111,3 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
     </>
   );
 };
-

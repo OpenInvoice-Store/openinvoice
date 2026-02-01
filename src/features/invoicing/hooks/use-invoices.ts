@@ -25,15 +25,36 @@ export interface Invoice {
   notes?: string | null;
   shareToken?: string | null;
   emailSentCount?: number;
+  currency?: string | null;
+  taxCalculationMethod?: string | null;
+  taxProfileId?: string | null;
+  organization?: {
+    defaultCurrency: string;
+  };
   createdAt: string;
   updatedAt: string;
+  // Payment reminder tracking
+  lastReminderSentAt?: string | null;
+  reminderCount?: number;
+  markedOverdueAt?: string | null;
   customer?: {
     id: string;
     name: string;
     email?: string | null;
+    phone?: string | null;
   };
   items: InvoiceItem[];
   payments: Payment[];
+  invoiceTaxes?: Array<{
+    id: string;
+    invoiceId: string;
+    name: string;
+    rate: number;
+    amount: number;
+    authority?: string | null;
+    isOverride: boolean;
+    createdAt: string;
+  }>;
 }
 
 export interface Payment {
@@ -82,6 +103,9 @@ export function useCreateInvoice() {
       issueDate?: string;
       status?: string;
       notes?: string;
+      templateId?: string | null;
+      currency?: string;
+      taxProfileId?: string;
       items: Array<{
         productId: string;
         description: string;
@@ -110,8 +134,16 @@ export function useUpdateInvoice() {
     mutationFn: async ({
       id,
       ...data
-    }: Partial<Invoice> & {
+    }: {
       id: string;
+      customerId?: string;
+      dueDate?: string;
+      issueDate?: string;
+      status?: string;
+      notes?: string | null;
+      templateId?: string | null;
+      currency?: string;
+      taxProfileId?: string;
       items?: Array<{
         productId: string;
         description: string;

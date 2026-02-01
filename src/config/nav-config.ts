@@ -54,6 +54,12 @@ export const navItems: NavItem[] = [
         shortcut: ['i', 'i']
       },
       {
+        title: 'Recurring Invoices',
+        url: '/dashboard/recurring-invoices',
+        icon: 'invoices',
+        shortcut: ['r', 'r']
+      },
+      {
         title: 'Customers',
         url: '/dashboard/customers',
         icon: 'customers',
@@ -73,6 +79,14 @@ export const navItems: NavItem[] = [
     url: '/dashboard/kanban',
     icon: 'kanban',
     shortcut: ['k', 'k'],
+    isActive: false,
+    items: []
+  },
+  {
+    title: 'Reports',
+    url: '/dashboard/reports',
+    icon: 'post',
+    shortcut: ['r', 'e'],
     isActive: false,
     items: []
   },

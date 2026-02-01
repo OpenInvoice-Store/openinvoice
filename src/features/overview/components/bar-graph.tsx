@@ -16,17 +16,10 @@ import {
   ChartTooltip,
   ChartTooltipContent
 } from '@/components/ui/chart';
-import { useQuery } from '@tanstack/react-query';
+import { useRevenueByDay } from '../hooks/use-dashboard-stats';
 import { formatCurrency } from '@/lib/format';
 
 export const description = 'Invoice revenue over time';
-
-async function fetchRevenueData() {
-  const res = await fetch('/api/dashboard/stats');
-  if (!res.ok) throw new Error('Failed to fetch revenue data');
-  const data = await res.json();
-  return data.revenueByDay || {};
-}
 
 const chartConfig = {
   revenue: {
@@ -36,10 +29,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function BarGraph() {
-  const { data: revenueByDay = {}, isLoading } = useQuery({
-    queryKey: ['revenueByDay'],
-    queryFn: fetchRevenueData,
-  });
+  const { data: revenueByDay = {}, isLoading } = useRevenueByDay();
 
   const chartData = React.useMemo(() => {
     const entries = Object.entries(revenueByDay);
@@ -48,7 +38,7 @@ export function BarGraph() {
       .map(([date, revenue]) => ({ date, revenue: revenue as number }))
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-30);
-    
+
     return sorted;
   }, [revenueByDay]);
 
@@ -73,7 +63,7 @@ export function BarGraph() {
           </div>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='aspect-auto h-[250px] w-full flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground flex aspect-auto h-[250px] w-full items-center justify-center'>
             Loading chart data...
           </div>
         </CardContent>
@@ -91,7 +81,7 @@ export function BarGraph() {
           </div>
         </CardHeader>
         <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
-          <div className='aspect-auto h-[250px] w-full flex items-center justify-center text-muted-foreground'>
+          <div className='text-muted-foreground flex aspect-auto h-[250px] w-full items-center justify-center'>
             No invoice data to display
           </div>
         </CardContent>
@@ -180,11 +170,7 @@ export function BarGraph() {
                 />
               }
             />
-            <Bar
-              dataKey='revenue'
-              fill='url(#fillBar)'
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey='revenue' fill='url(#fillBar)' radius={[4, 4, 0, 0]} />
           </BarChart>
         </ChartContainer>
       </CardContent>

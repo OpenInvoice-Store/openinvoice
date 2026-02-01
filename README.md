@@ -15,6 +15,7 @@ Built with modern web technologies and best practices, Open Invoice provides a p
 ### Key Features
 
 - 📝 **Invoice Management** - Create, edit, and manage invoices with a beautiful, user-friendly interface
+- 🔄 **Recurring Invoices & Subscriptions** - Create recurring invoice templates with automated generation, subscription management, and flexible scheduling
 - 👥 **Customer Management** - Keep track of all your customers with detailed contact information
 - 📦 **Product Catalog** - Manage your products and services with pricing and tax information
 - 💰 **Payment Tracking** - Record and track payments against invoices
@@ -23,11 +24,13 @@ Built with modern web technologies and best practices, Open Invoice provides a p
 - 🎯 **Kanban Board** - Visual invoice workflow management with drag-and-drop
 - 🔗 **Shareable Invoices** - Generate secure, shareable links for your clients
 - 📄 **PDF Generation** - Export invoices as professional PDF documents
+- 🎨 **Branding & Templates** - Customize company branding (logo, colors, fonts) and create multiple invoice templates
 - 🏢 **Multi-Tenant Workspaces** - Organize invoices by workspace/team with Clerk Organizations
 - 🔐 **Secure Authentication** - Enterprise-grade authentication with Clerk
 - 💳 **Subscription Management** - Built-in billing and subscription handling
 - 🔒 **Role-Based Access Control** - Fine-grained permissions and access control
 - 💳 **Stripe Payment Processing** - Accept online payments with Stripe Connect, support for partial payments, and automatic invoice status updates
+- 🧾 **Custom Tax System** - Flexible tax calculation with tax profiles, rules, and jurisdictions. Support for multiple tax types (sales tax, VAT/GST, service tax) with presets for common regions
 
 ## Tech Stack
 
@@ -150,6 +153,7 @@ For detailed setup instructions, see:
 
 - **Clerk Setup** (Authentication, Organizations, Billing & Webhooks) - [docs/clerk_setup.md](./docs/clerk_setup.md)
 - **Stripe Connect Setup** - [docs/stripe_connect_setup.md](./docs/stripe_connect_setup.md)
+- **Payment Reminders Cron Job** - [docs/cron_setup.md](./docs/cron_setup.md)
 - **RBAC Configuration** - [docs/nav-rbac.md](./docs/nav-rbac.md)
 
 ## Features Overview
@@ -163,6 +167,21 @@ For detailed setup instructions, see:
 - Add custom notes to invoices
 - Generate PDF documents
 - Share invoices via secure, shareable links
+- Modern invoice details page with left-side section navigation (Details, Payments, Emails, Notes)
+
+### Recurring Invoices & Subscriptions
+
+- Create recurring invoice templates with flexible scheduling (daily, weekly, monthly, quarterly, yearly, custom)
+- Automated invoice generation via cron job
+- Subscription management with pause/resume/cancel functionality
+- Template-based invoice creation with reusable items
+- Automatic email sending for generated invoices
+- Next generation date tracking
+- View all invoices generated from a template
+- Statistics dashboard showing revenue, payments, and invoice counts
+- Manual invoice generation on demand
+- End date support for time-limited subscriptions
+- Custom interval support for flexible billing cycles
 
 ### Customer Management
 
@@ -176,6 +195,26 @@ For detailed setup instructions, see:
 - Set prices and tax rates
 - Add product images
 - Quick product selection when creating invoices
+
+### Branding & Templates
+
+- **Company Branding** - Customize your company's appearance on invoices
+  - Upload and manage company logo
+  - Set primary and secondary brand colors
+  - Choose font family for invoices
+  - Add company contact information (address, phone, email, website)
+  - Customize footer text
+  - Set default currency per organization
+
+- **Invoice Templates** - Create and manage multiple invoice templates
+  - Create custom invoice templates with unique layouts
+  - Set default template for automatic assignment
+  - Activate/deactivate templates
+  - Configure template layouts (standard, compact, detailed)
+  - Custom header and footer templates (HTML)
+  - Custom CSS styling (JSON)
+  - Template selection when creating new invoices
+  - Template management interface with CRUD operations
 
 ### Analytics Dashboard
 
@@ -209,7 +248,7 @@ For detailed setup instructions, see:
 - Email history with detailed event logs
 - Resend webhook integration for event tracking
 - Email status badges and notifications
-- Right sidebar drawer navigation for email history
+- Left-side section navigation for email history (integrated with invoice details page)
 - Track email opens, clicks, bounces, and delivery events
 
 ### Payment Processing
@@ -217,14 +256,39 @@ For detailed setup instructions, see:
 - **Stripe Connect Integration** - Multi-tenant payment processing with Express accounts
 - **Online Payments** - Accept credit card payments directly on invoices
 - **Payment Forms** - Secure, PCI-compliant payment forms using Stripe Elements
+- **Multiple Payment Methods** - Support for cards, ACH, bank transfers via Stripe's automatic payment methods
+- **Saved Payment Methods** - Stripe Customer integration with saved cards for faster checkout
 - **Partial Payments** - Support for partial invoice payments with balance tracking
+- **Payment Plans & Installments** - Split invoices into multiple installments (weekly, biweekly, monthly, quarterly) with automatic payment allocation and status tracking
 - **Automatic Status Updates** - Invoice status automatically updates on successful payment
 - **Payment Validation** - Amount validation prevents overpayment
 - **Webhook Processing** - Real-time payment status updates via Stripe webhooks
 - **Payment History** - Complete payment tracking with Stripe payment intent IDs
+- **Payment Receipts** - Generate PDF receipts for each payment with download action
 - **Email Confirmations** - Automatic payment confirmation emails to customers
 - **Stripe Onboarding** - Streamlined Stripe Connect account setup in settings
+- **Stripe Account Management** - Soft disconnect, reconnect, and reset options for better UX
 - **Platform Fees** - Configurable platform fee calculation and application
+
+### Tax Management
+
+- **Custom Tax System** - Built-in tax calculation engine without third-party dependencies
+  - **Tax Profiles** - Create tax profiles for different jurisdictions (country + region)
+  - **Multiple Tax Rules** - Define multiple tax rules per profile (e.g., GST + PST, VAT + local tax)
+  - **Tax Presets** - Pre-configured tax templates for common regions:
+    - Canada: GST (5%), PST (varies by province), QST/TVQ (9.975%)
+    - United States: State tax templates
+    - European Union: VAT templates
+    - United Kingdom: VAT templates
+    - Australia: GST templates
+    - India: GST templates
+  - **Tax Calculation** - Automatic tax calculation based on selected tax profile
+  - **Tax Breakdown** - Detailed tax breakdown displayed on invoices, PDFs, and emails with percentages
+  - **Manual Tax Override** - Override default tax rates for specific invoices
+  - **Tax Exemptions** - Support for tax-exempt customers with exemption reasons
+  - **Default Tax Profile** - Set default tax profile per organization
+  - **Tax Authority Labels** - Categorize taxes by authority type (federal, state, provincial, VAT, local)
+  - **User-Controlled** - Simple, explicit tax system where business owners choose appropriate taxes
 
 ## Roadmap
 
@@ -244,8 +308,8 @@ For detailed setup instructions, see:
   - [x] Stripe Connect onboarding flow in settings ✅
   - [x] Platform fee calculation and application ✅
   - [x] Payment error handling and user feedback ✅
-  - [ ] Payment method storage (optional: Stripe Customer portal)
-  - [ ] Payment receipt generation
+  - [x] Payment method storage (Stripe Customer + saved cards via setup_future_usage) ✅
+  - [x] Payment receipt generation ✅
 
 ### Phase 1.5: Email Functionality (Q1 2026) ✅ Completed
 
@@ -263,32 +327,35 @@ For detailed setup instructions, see:
   - [x] Right sidebar navigation for email/payment/notes history
   - [x] Email status badges and detailed event logs
 
-### Phase 2: Enhanced Payment Features (Q2 2026)
+### Phase 2: Enhanced Payment Features (Q2 2026) ✅ Completed
 
-- [ ] **Payment Methods Expansion**
-  - [ ] Support for multiple payment methods (cards, ACH, bank transfers)
-  - [ ] Saved payment methods for recurring customers
-  - [ ] Payment plans and installments
-  - [ ] Automatic payment retry for failed transactions
-  - [ ] Payment method preferences by customer
-- [ ] **Crypto Payment Integration**
-  - [ ] Research and select crypto payment provider (Coinbase Commerce, BitPay, etc.)
-  - [ ] Set up crypto payment API integration
-  - [ ] Implement crypto payment form component
-  - [ ] Add crypto payment option to invoice payment page
-  - [ ] Support for multiple cryptocurrencies (Bitcoin, Ethereum, USDC, etc.)
-  - [ ] Real-time exchange rate conversion
-  - [ ] Crypto payment webhook handling for status updates
-  - [ ] Automatic invoice status updates on crypto payment confirmation
-  - [ ] Crypto payment history and tracking
-  - [ ] Payment confirmation emails for crypto transactions
-  - [ ] Crypto wallet address generation and management
-  - [ ] Transaction verification and blockchain confirmation tracking
-- [ ] **Payment Analytics**
-  - [ ] Payment success rate tracking
-  - [ ] Failed payment analysis and insights
-  - [ ] Payment method performance metrics
-  - [ ] Revenue forecasting based on payment patterns
+- [x] **Payment Methods Expansion** ✅
+  - [x] Support for multiple payment methods (cards, ACH, bank transfers via automatic_payment_methods) ✅
+  - [x] Saved payment methods for recurring customers (via Stripe Customer + setup_future_usage) ✅
+  - [x] Payment plans and installments ✅
+    - [x] Payment plan creation with configurable frequency (weekly, biweekly, monthly, quarterly) ✅
+    - [x] Automatic installment generation with proper rounding handling ✅
+    - [x] Installment status tracking (pending, paid, overdue, cancelled) ✅
+    - [x] Automatic payment allocation to installments in order ✅
+    - [x] Payment plan UI components and management interface ✅
+    - [x] Installment-specific payment amounts on shared invoices ✅
+    - [x] Payment plan display with installment list and status badges ✅
+    - [x] Support for 2-60 installments per payment plan ✅
+  - [x] Automatic payment retry for failed transactions ✅
+    - [x] Automatic retry cron job with exponential backoff (1h, 6h, 24h) ✅
+    - [x] Retry tracking (count, last retry, next retry, status) ✅
+    - [x] Retry using saved payment methods ✅
+    - [x] Retry status display in payment UI ✅
+    - [x] Configurable max retries (default: 3) ✅
+    - [x] GitHub Actions workflow integration ✅
+  - [x] Payment method preferences by customer ✅
+    - [x] Store Stripe customer ID on Customer model ✅
+    - [x] Store preferred payment method ID ✅
+    - [x] API endpoint to get/set payment method preferences ✅
+    - [x] Payment intent uses preferred payment method automatically ✅
+    - [x] UI to manage payment method preferences in customer edit page ✅
+    - [x] Display saved payment methods with card details ✅
+    - [x] Set/remove default payment method ✅
 
 ### Phase 3: Multi-Provider Support (Q3 2026) - Optional
 
@@ -303,26 +370,97 @@ For detailed setup instructions, see:
 
 ### Phase 4: Advanced Features (Q4 2026)
 
-- [ ] **Recurring Invoices & Subscriptions**
-  - [ ] Recurring invoice templates
-  - [ ] Automated invoice generation
-  - [ ] Subscription management
-  - [ ] Usage-based billing
-- [ ] **Automation & Notifications**
-  - [ ] Payment reminders and automated follow-ups
-  - [ ] Overdue invoice notifications
+- [x] **Recurring Invoices & Subscriptions** ✅
+  - [x] Recurring invoice templates ✅
+  - [x] Automated invoice generation ✅
+  - [x] Subscription management ✅
+  - [x] Usage-based billing ✅
+    - [x] Enable usage-based billing on templates ✅
+    - [x] Record usage data with period tracking ✅
+    - [x] Automatic invoice calculation from usage ✅
+    - [x] Usage history and management UI ✅
+    - [x] Link usage records to generated invoices ✅
+  - [x] Recurring invoice detail page with left sidebar navigation ✅
+    - [x] Overview section with statistics and template details ✅
+    - [x] Items section with add/edit functionality ✅
+    - [x] Usage section for usage-based templates ✅
+    - [x] Invoices section with generated invoices list and manual generation ✅
+    - [x] Notes section with add/edit functionality ✅
+- [x] **Automation & Notifications** ✅
+  - [x] Payment reminders and automated follow-ups ✅
+    - [x] Automated cron job for payment reminders (GitHub Actions) ✅
+    - [x] Reminder emails for upcoming invoices (3 days before due) ✅
+    - [x] Reminder emails for due today invoices ✅
+    - [x] Overdue invoice notifications (7, 14, 30+ days) ✅
+    - [x] Manual "Send Reminder" button in invoice view ✅
+    - [x] Reminders sidebar section with reminder history ✅
+    - [x] Reminder tracking (count, last sent date) ✅
+    - [x] Flexible testing mode with query parameters ✅
+    - [x] Debug mode for troubleshooting ✅
+  - [x] Overdue invoice notifications ✅
   - [x] Custom email templates ✅
   - [ ] SMS notifications (optional)
 - [ ] **International & Compliance**
-  - [ ] Multi-currency support
-  - [ ] Tax calculation integration (Avalara, TaxJar)
+  - [x] Multi-currency support ✅
+    - [x] Currency field on invoices with organization default fallback ✅
+    - [x] Currency selection in invoice forms ✅
+    - [x] Currency display in invoice views and PDFs ✅
+    - [x] Currency support for recurring invoices and templates ✅
+    - [x] Currency display in recurring invoice tables and detail pages ✅
+    - [x] Support for 20+ currencies (USD, EUR, GBP, JPY, CAD, etc.) ✅
+  - [x] **Custom Tax System** ✅
+    - [x] Tax profile management with country and region support ✅
+    - [x] Multiple tax rules per profile (GST, PST, VAT, etc.) ✅
+    - [x] Tax presets for common regions (Canada, US, EU, UK, Australia, India) ✅
+    - [x] Tax calculation engine with percentage-based rates ✅
+    - [x] Tax breakdown display in invoices, PDFs, and emails ✅
+    - [x] Manual tax override support ✅
+    - [x] Tax exemption support for customers ✅
+    - [x] Default tax profile per organization ✅
   - [ ] Payment dispute management
   - [ ] Compliance reporting (GDPR, PCI-DSS)
-- [ ] **Advanced Analytics**
-  - [ ] Custom report builder
-  - [ ] Export capabilities (CSV, Excel, PDF)
-  - [ ] Financial forecasting
-  - [ ] Customer lifetime value analysis
+- [x] **Branding & Templates** ✅
+  - [x] Custom branding (logo, colors, fonts) ✅
+    - [x] Logo upload and management with image preview ✅
+    - [x] Primary and secondary color customization (hex colors) ✅
+    - [x] Font family selection for invoices ✅
+    - [x] Company information settings (address, phone, email, website) ✅
+    - [x] Footer text customization ✅
+    - [x] Default currency setting per organization ✅
+  - [x] Invoice template customization ✅
+    - [x] Multiple invoice templates per organization ✅
+    - [x] Template creation, editing, and deletion ✅
+    - [x] Default template selection and management ✅
+    - [x] Template activation/deactivation ✅
+    - [x] Template layout configuration (standard, compact, detailed) ✅
+    - [x] Custom header and footer templates (HTML) ✅
+    - [x] Custom CSS styles (JSON) ✅
+    - [x] Template selection when creating invoices ✅
+    - [x] Automatic default template assignment ✅
+  - [ ] Branded email templates (using branding settings)
+  - [x] Custom invoice layouts ✅
+  - [x] Company branding settings page ✅
+- [x] **Advanced Analytics** ✅
+  - [x] Custom report builder ✅
+  - [x] Export capabilities (CSV, Excel, PDF) ✅
+  - [x] Financial forecasting ✅
+  - [x] Customer lifetime value analysis ✅
+
+### Phase 5: Crypto Payment Integration (Final Phase)
+
+- [ ] **Crypto Payment Integration**
+  - [ ] Research and select crypto payment provider (Coinbase Commerce, BitPay, etc.)
+  - [ ] Set up crypto payment API integration
+  - [ ] Implement crypto payment form component
+  - [ ] Add crypto payment option to invoice payment page
+  - [ ] Support for multiple cryptocurrencies (Bitcoin, Ethereum, USDC, etc.)
+  - [ ] Real-time exchange rate conversion
+  - [ ] Crypto payment webhook handling for status updates
+  - [ ] Automatic invoice status updates on crypto payment confirmation
+  - [ ] Crypto payment history and tracking
+  - [ ] Payment confirmation emails for crypto transactions
+  - [ ] Crypto wallet address generation and management
+  - [ ] Transaction verification and blockchain confirmation tracking
 
 ## Scripts
 
@@ -341,7 +479,13 @@ The application uses PostgreSQL with Prisma ORM. Key models include:
 - **Product** - Product/service catalog with pricing
 - **Invoice** - Invoice headers with status and dates
 - **InvoiceItem** - Line items for each invoice
-- **Payment** - Payment records linked to invoices
+- **Payment** - Payment records linked to invoices and installments
+- **PaymentPlan** - Payment plan configuration (frequency, installment count)
+- **Installment** - Individual payment installments with due dates and amounts
+- **RecurringInvoiceTemplate** - Recurring invoice templates with scheduling and automation
+- **TaxProfile** - Tax profiles for different jurisdictions (country, region)
+- **TaxRule** - Individual tax rules within a tax profile (name, rate, authority)
+- **InvoiceTax** - Tax breakdown records for each invoice
 - **EmailLog** - Email tracking and audit trail
 - **EmailEvent** - Individual email events (opens, clicks, bounces, etc.)
 

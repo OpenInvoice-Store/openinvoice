@@ -32,31 +32,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Delete the Stripe account (or you might want to just disable it)
-    try {
-      await stripe.accounts.del(organization.stripeAccountId);
-    } catch (error: any) {
-      // If account is already deleted or doesn't exist, that's fine
-      if (error.code !== 'resource_missing') {
-        throw error;
-      }
-    }
-
-    // Clear Stripe connection from database
+    // Soft disconnect: keep the Stripe account but disable it in our app
     await prisma.organization.update({
       where: { id: orgId },
       data: {
-        stripeAccountId: null,
-        stripeConnectEnabled: false,
-        stripeAccountStatus: null,
-        stripeOnboardingComplete: false,
-        stripeAccountEmail: null
+        stripeConnectEnabled: false
       }
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Stripe account disconnected successfully'
+      message:
+        'Stripe account disconnected in app. The Stripe account remains active in Stripe.'
     });
   } catch (error) {
     console.error('Error disconnecting Stripe account:', error);

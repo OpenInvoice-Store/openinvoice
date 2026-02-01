@@ -2,6 +2,10 @@ import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { sendPaymentConfirmationEmail } from '@/lib/email';
+import {
+  applyPaymentToInstallments,
+  updateInvoiceStatusFromPaymentPlan
+} from '@/lib/payment-plan';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,10 +20,16 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const invoiceId = searchParams.get('invoiceId');
+    const customerId = searchParams.get('customerId');
 
     const payments = await prisma.payment.findMany({
       where: {
         ...(invoiceId && { invoiceId }),
+        ...(customerId && {
+          invoice: {
+            customerId
+          }
+        }),
         invoice: {
           organizationId: orgId
         }
@@ -27,7 +37,12 @@ export async function GET(request: NextRequest) {
       include: {
         invoice: {
           include: {
-            customer: true
+            customer: true,
+            organization: {
+              select: {
+                defaultCurrency: true
+              }
+            }
           }
         }
       },
@@ -81,10 +96,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const paymentAmount = parseFloat(amount);
     const payment = await prisma.payment.create({
       data: {
         invoiceId,
-        amount: parseFloat(amount),
+        amount: paymentAmount,
         date: date ? new Date(date) : new Date(),
         method,
         notes
@@ -95,31 +111,20 @@ export async function POST(request: NextRequest) {
             customer: true,
             organization: true,
             items: true,
-            payments: true
+            payments: true,
+            paymentPlan: true
           }
         }
       }
     });
 
-    // Check if invoice should be marked as paid
-    const totalAmount = invoice.items.reduce(
-      (sum, item) =>
-        sum + item.price * item.quantity * (1 + item.taxRate / 100),
-      0
-    );
-    const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-
-    if (totalPaid >= totalAmount) {
-      await prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { status: 'paid' }
-      });
-    } else if (invoice.status === 'draft') {
-      await prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { status: 'sent' }
-      });
+    // If invoice has a payment plan, apply payment to installments
+    if (payment.invoice.paymentPlan) {
+      await applyPaymentToInstallments(invoiceId, payment.id, paymentAmount);
     }
+
+    // Update invoice status (handles both regular and payment plan invoices)
+    await updateInvoiceStatusFromPaymentPlan(invoiceId);
 
     // Send payment confirmation email if customer has email
     if (payment.invoice.customer.email) {
@@ -151,7 +156,8 @@ export async function POST(request: NextRequest) {
             invoiceUrl,
             amount: payment.amount,
             paymentDate: payment.date,
-            organizationName: payment.invoice.organization?.name
+            organizationName: payment.invoice.organization?.name,
+            organizationId: orgId
           });
           resendId = emailResult.id || null;
         } catch (emailError) {

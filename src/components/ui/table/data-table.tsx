@@ -16,12 +16,14 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 interface DataTableProps<TData> extends React.ComponentProps<'div'> {
   table: TanstackTable<TData>;
   actionBar?: React.ReactNode;
+  onRowClick?: (row: TData) => void;
 }
 
 export function DataTable<TData>({
   table,
   actionBar,
-  children
+  children,
+  onRowClick
 }: DataTableProps<TData>) {
   return (
     <div className='flex min-h-0 flex-1 flex-col space-y-4'>
@@ -58,6 +60,23 @@ export function DataTable<TData>({
                     <TableRow
                       key={row.id}
                       data-state={row.getIsSelected() && 'selected'}
+                      onClick={(e) => {
+                        // Don't trigger row click if clicking on a button, link, or input
+                        const target = e.target as HTMLElement;
+                        if (
+                          target.closest('button') ||
+                          target.closest('a') ||
+                          target.closest('input') ||
+                          target.closest('[role="button"]') ||
+                          target.closest('[data-no-row-click]')
+                        ) {
+                          return;
+                        }
+                        onRowClick?.(row.original);
+                      }}
+                      className={
+                        onRowClick ? 'hover:bg-muted/50 cursor-pointer' : ''
+                      }
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell

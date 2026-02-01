@@ -1,0 +1,37 @@
+name: Recurring Invoice Generation
+
+on:
+  schedule:
+    # Run daily at 8:00 AM UTC (before payment reminders)
+    # Format: minute hour day month day-of-week
+    # Examples:
+    # '0 8 * * *' - Daily at 8:00 AM UTC
+    # '0 8 * * 1-5' - Weekdays at 8:00 AM UTC
+    # '0 */6 * * *' - Every 6 hours
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allow manual triggering from GitHub Actions UI
+
+jobs:
+  generate-recurring-invoices:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Recurring Invoices
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X GET "${{ secrets.APP_URL }}/api/cron/generate-recurring" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Recurring invoices generated successfully"
+            exit 0
+          else
+            echo "❌ Failed to generate recurring invoices (HTTP $http_code)"
+            exit 1
+          fi
+

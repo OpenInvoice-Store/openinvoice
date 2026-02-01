@@ -16,7 +16,13 @@ import { Badge } from '@/components/ui/badge';
 import { Info, CheckCircle2, XCircle, Loader2, Link2 } from 'lucide-react';
 import { billingInfoContent } from '@/config/infoconfig';
 import { toast } from 'sonner';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+import {
+  useStripeConnectStatus,
+  useConnectStripe,
+  useDisconnectStripe,
+  useEnableStripePayments
+} from '@/features/invoicing/hooks/use-stripe';
 
 interface StripeConnectStatus {
   connected: boolean;
@@ -26,67 +32,51 @@ interface StripeConnectStatus {
   detailsSubmitted?: boolean;
   chargesEnabled?: boolean;
   payoutsEnabled?: boolean;
+  connectEnabled?: boolean;
 }
 
 export default function BillingPage() {
   const { organization, isLoaded } = useOrganization();
-  const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Fetch Stripe Connect status
   const { data: stripeStatus, isLoading: isLoadingStatus } =
-    useQuery<StripeConnectStatus>({
-      queryKey: ['stripe-connect-status'],
-      queryFn: async () => {
-        const response = await fetch('/api/stripe/connect/status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch Stripe status');
+    useStripeConnectStatus(!!organization);
+  const connectStripe = useConnectStripe();
+  const disconnectStripe = useDisconnectStripe();
+  const enableStripe = useEnableStripePayments();
+
+  const handleConnect = () => {
+    connectStripe.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data.url) {
+          window.location.href = data.url;
         }
-        return response.json();
-      },
-      enabled: !!organization,
-      refetchInterval: 5000 // Poll every 5 seconds when connecting
+        setIsConnecting(true);
+      }
     });
+  };
 
-  // Connect Stripe mutation
-  const connectMutation = useMutation({
+  // Hard reset Stripe mutation (delete account and clear connection)
+  // Note: This is a special case that's not in the hook, keeping it inline
+  const resetMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/stripe/connect/authorize');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to connect Stripe');
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-      setIsConnecting(true);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to connect Stripe account');
-    }
-  });
-
-  // Disconnect Stripe mutation
-  const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/stripe/connect/disconnect', {
+      const response = await fetch('/api/stripe/connect/reset', {
         method: 'POST'
       });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to disconnect Stripe');
+        throw new Error(data.error || 'Failed to reset Stripe');
       }
       return response.json();
     },
     onSuccess: () => {
-      toast.success('Stripe account disconnected successfully');
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
+      toast.success(
+        'Stripe account reset successfully. You will need to redo Stripe onboarding next time you connect.'
+      );
+      // Invalidate queries - we'll need to import useQueryClient for this
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to disconnect Stripe account');
+      toast.error(error.message || 'Failed to reset Stripe account');
     }
   });
 
@@ -95,11 +85,10 @@ export default function BillingPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('stripe_connected') === 'true') {
       toast.success('Stripe account connected successfully!');
-      queryClient.invalidateQueries({ queryKey: ['stripe-connect-status'] });
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [queryClient]);
+  }, []);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -244,9 +233,9 @@ export default function BillingPage() {
                   <Alert>
                     <CheckCircle2 className='h-4 w-4' />
                     <AlertDescription>
-                      Your Stripe account is connected and ready to accept
-                      payments. Customers can now pay invoices online using
-                      credit cards.
+                      {stripeStatus.connectEnabled
+                        ? 'Your Stripe account is connected and ready to accept payments. Customers can now pay invoices online using credit cards.'
+                        : 'Your Stripe account is active in Stripe, but payments are currently disabled for this organization in Open Invoice.'}
                     </AlertDescription>
                   </Alert>
                 ) : (
@@ -259,35 +248,82 @@ export default function BillingPage() {
                   </Alert>
                 )}
 
-                <div className='flex gap-2'>
+                <div className='flex flex-wrap gap-2'>
                   <Button
                     variant='outline'
-                    onClick={() => connectMutation.mutate()}
-                    disabled={connectMutation.isPending}
+                    onClick={handleConnect}
+                    disabled={connectStripe.isPending}
                   >
                     <Link2 className='mr-2 h-4 w-4' />
                     Update Connection
                   </Button>
+                  {stripeStatus.connectEnabled ? (
+                    <Button
+                      variant='destructive'
+                      onClick={() => {
+                        if (
+                          confirm(
+                            'Are you sure you want to disconnect Stripe payments for this organization? Your Stripe account will remain active in Stripe.'
+                          )
+                        ) {
+                          disconnectStripe.mutate();
+                        }
+                      }}
+                      disabled={disconnectStripe.isPending}
+                    >
+                      {disconnectStripe.isPending ? (
+                        <>
+                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          Disconnecting...
+                        </>
+                      ) : (
+                        'Disconnect Payments'
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant='outline'
+                      onClick={() => {
+                        if (
+                          confirm(
+                            'Reconnect Stripe payments for this organization? Your existing Stripe account will be used.'
+                          )
+                        ) {
+                          enableStripe.mutate();
+                        }
+                      }}
+                      disabled={enableStripe.isPending}
+                    >
+                      {enableStripe.isPending ? (
+                        <>
+                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          Reconnecting...
+                        </>
+                      ) : (
+                        'Reconnect Payments'
+                      )}
+                    </Button>
+                  )}
                   <Button
-                    variant='destructive'
+                    variant='outline'
                     onClick={() => {
                       if (
                         confirm(
-                          'Are you sure you want to disconnect your Stripe account?'
+                          'This will permanently reset your Stripe connection for this organization and delete the connected Stripe account. You will need to complete all Stripe onboarding steps again. This cannot be undone. Continue?'
                         )
                       ) {
-                        disconnectMutation.mutate();
+                        resetMutation.mutate();
                       }
                     }}
-                    disabled={disconnectMutation.isPending}
+                    disabled={resetMutation.isPending}
                   >
-                    {disconnectMutation.isPending ? (
+                    {resetMutation.isPending ? (
                       <>
                         <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                        Disconnecting...
+                        Resetting...
                       </>
                     ) : (
-                      'Disconnect'
+                      'Reset Stripe Account'
                     )}
                   </Button>
                 </div>
@@ -303,11 +339,11 @@ export default function BillingPage() {
                   </AlertDescription>
                 </Alert>
                 <Button
-                  onClick={() => connectMutation.mutate()}
-                  disabled={connectMutation.isPending || isConnecting}
+                  onClick={handleConnect}
+                  disabled={connectStripe.isPending || isConnecting}
                   className='w-full'
                 >
-                  {connectMutation.isPending || isConnecting ? (
+                  {connectStripe.isPending || isConnecting ? (
                     <>
                       <Loader2 className='mr-2 h-4 w-4 animate-spin' />
                       Connecting...

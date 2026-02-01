@@ -3,9 +3,18 @@ import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header';
 import { Invoice } from '@/features/invoicing/hooks/use-invoices';
 import { Column, ColumnDef } from '@tanstack/react-table';
-import { Calendar, DollarSign, FileText, User, Hash } from 'lucide-react';
+import {
+  Calendar,
+  DollarSign,
+  FileText,
+  User,
+  Hash,
+  Globe
+} from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/format';
+import { getInvoiceCurrency } from '@/lib/currency';
 import { CellAction } from './cell-action';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -33,15 +42,9 @@ const calculateTotal = (invoice: Invoice) => {
     return 0;
   }
 
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const tax = invoice.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
-    0
-  );
-  return subtotal + tax;
+  // Use utility function for consistent calculations
+  const { total } = calculateInvoiceTotals(invoice);
+  return total;
 };
 
 export const columns: ColumnDef<Invoice>[] = [
@@ -123,12 +126,32 @@ export const columns: ColumnDef<Invoice>[] = [
     ),
     cell: ({ row }) => {
       const total = calculateTotal(row.original);
-      return <div className='font-medium'>{formatCurrency(total)}</div>;
+      const currency = getInvoiceCurrency(row.original);
+      return (
+        <div className='font-medium'>{formatCurrency(total, currency)}</div>
+      );
     },
     meta: {
       label: 'Total',
       variant: 'number',
       icon: DollarSign
+    },
+    enableColumnFilter: true
+  },
+  {
+    id: 'currency',
+    accessorFn: (row) => getInvoiceCurrency(row),
+    header: ({ column }: { column: Column<Invoice, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Currency' />
+    ),
+    cell: ({ row }) => {
+      const currency = getInvoiceCurrency(row.original);
+      return <div className='font-medium'>{currency}</div>;
+    },
+    meta: {
+      label: 'Currency',
+      variant: 'text',
+      icon: Globe
     },
     enableColumnFilter: true
   },

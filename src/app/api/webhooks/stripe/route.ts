@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { sendPaymentConfirmationEmail } from '@/lib/email';
+import {
+  sendSMS,
+  generatePaymentConfirmationSMS,
+  formatPhoneNumber,
+  isValidPhoneNumber
+} from '@/lib/sms';
+import { getInvoiceCurrency } from '@/lib/currency';
+import {
+  applyPaymentToInstallments,
+  updateInvoiceStatusFromPaymentPlan
+} from '@/lib/payment-plan';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -117,6 +128,60 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   // Create payment record
   const amount = paymentIntent.amount / 100; // Convert from cents
 
+  // Ensure customer's stripeCustomerId is stored in database
+  const stripeCustomerId = paymentIntent.customer as string | null;
+  if (stripeCustomerId && invoice.customer) {
+    // Update customer record with Stripe customer ID if not already set
+    const customer = invoice.customer as any;
+    if (!customer.stripeCustomerId) {
+      await prisma.customer.update({
+        where: { id: invoice.customerId },
+        data: { stripeCustomerId } as any
+      });
+    }
+  }
+
+  // If payment method was saved (setup_future_usage was set), ensure it's attached to customer
+  // With Stripe Connect, payment methods are saved automatically when setup_future_usage is set
+  // but we should verify the customer has the stripeCustomerId stored
+  if (stripeCustomerId && paymentIntent.payment_method) {
+    try {
+      // Verify payment method exists and is attached to customer
+      const paymentMethod = await stripe.paymentMethods.retrieve(
+        paymentIntent.payment_method as string
+      );
+
+      // If payment method is not attached to customer, attach it
+      if (
+        !paymentMethod.customer ||
+        paymentMethod.customer !== stripeCustomerId
+      ) {
+        try {
+          await stripe.paymentMethods.attach(
+            paymentIntent.payment_method as string,
+            {
+              customer: stripeCustomerId
+            }
+          );
+        } catch (attachError: any) {
+          // If already attached, that's fine - otherwise log error
+          if (attachError.code !== 'payment_method_already_attached') {
+            console.error(
+              '[Webhook] Error attaching payment method:',
+              attachError
+            );
+          }
+        }
+      }
+    } catch (error: any) {
+      // Payment method might not exist yet or other error - log for debugging
+      console.error(
+        '[Webhook] Payment method attachment error:',
+        error?.message || error
+      );
+    }
+  }
+
   const payment = await prisma.payment.create({
     data: {
       invoiceId,
@@ -125,7 +190,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       method: 'stripe',
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId: charge?.id || null,
-      stripeCustomerId: paymentIntent.customer as string | null,
+      stripeCustomerId: stripeCustomerId,
       stripeStatus: 'succeeded',
       notes: `Payment processed via Stripe. Payment Intent: ${paymentIntent.id}`
     }
@@ -138,7 +203,8 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       customer: true,
       organization: true,
       items: true,
-      payments: true
+      payments: true,
+      paymentPlan: true
     }
   });
 
@@ -147,27 +213,15 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     return;
   }
 
-  // Calculate totals
-  const totalAmount = invoiceWithRelations.items.reduce(
-    (sum, item) => sum + item.price * item.quantity * (1 + item.taxRate / 100),
-    0
-  );
-  const totalPaid =
-    invoiceWithRelations.payments.reduce((sum, p) => sum + p.amount, 0) +
-    amount;
-
-  // Update invoice status
-  let newStatus = invoice.status;
-  if (totalPaid >= totalAmount) {
-    newStatus = 'paid';
-  } else if (invoice.status === 'draft') {
-    newStatus = 'sent';
+  // If invoice has a payment plan, apply payment to installments
+  if (invoiceWithRelations.paymentPlan) {
+    await applyPaymentToInstallments(invoiceId, payment.id, amount);
+    // Update invoice status for payment plan invoices
+    await updateInvoiceStatusFromPaymentPlan(invoiceId);
+  } else {
+    // For regular invoices (no payment plan), update status directly
+    await updateRegularInvoiceStatus(invoiceId);
   }
-
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: { status: newStatus }
-  });
 
   // Send payment confirmation email
   if (invoiceWithRelations.customer.email) {
@@ -193,7 +247,8 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
         invoiceUrl,
         amount: payment.amount,
         paymentDate: payment.date,
-        organizationName: invoiceWithRelations.organization?.name
+        organizationName: invoiceWithRelations.organization?.name,
+        organizationId: invoiceWithRelations.organizationId
       });
 
       await prisma.emailLog.create({
@@ -209,17 +264,212 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       console.error('Error sending payment confirmation email:', emailError);
     }
   }
+
+  // Send payment confirmation SMS
+  if (invoiceWithRelations.customer.phone) {
+    try {
+      const formattedPhone = formatPhoneNumber(
+        invoiceWithRelations.customer.phone
+      );
+      if (isValidPhoneNumber(formattedPhone)) {
+        let shareToken = invoiceWithRelations.shareToken;
+        if (!shareToken) {
+          const { randomBytes } = await import('crypto');
+          shareToken = randomBytes(32).toString('base64url');
+          await prisma.invoice.update({
+            where: { id: invoiceId },
+            data: { shareToken }
+          });
+        }
+
+        const baseUrl =
+          process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const invoiceUrl = `${baseUrl}/invoice/${shareToken}`;
+        const currency = getInvoiceCurrency(invoiceWithRelations as any);
+
+        const smsMessage = generatePaymentConfirmationSMS({
+          customerName: invoiceWithRelations.customer.name,
+          invoiceNo: invoiceWithRelations.invoiceNo,
+          amount: payment.amount,
+          invoiceUrl,
+          currency,
+          organizationName: invoiceWithRelations.organization?.name
+        });
+
+        const smsResult = await sendSMS({
+          to: formattedPhone,
+          message: smsMessage,
+          invoiceId,
+          smsType: 'payment_confirmation',
+          organizationId: invoiceWithRelations.organizationId
+        });
+
+        await prisma.smsLog.create({
+          data: {
+            invoiceId,
+            smsType: 'payment_confirmation',
+            recipient: formattedPhone,
+            message: smsMessage,
+            status: smsResult.success ? 'sent' : 'failed',
+            twilioSid: smsResult.twilioSid,
+            errorMessage: smsResult.error
+          }
+        });
+      }
+    } catch (smsError) {
+      console.error('Error sending payment confirmation SMS:', smsError);
+      // Don't fail the webhook if SMS fails
+    }
+  }
+}
+
+/**
+ * Update invoice status for regular invoices (without payment plans)
+ */
+async function updateRegularInvoiceStatus(invoiceId: string): Promise<void> {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      items: true,
+      payments: true,
+      invoiceTaxes: true
+    }
+  });
+
+  if (!invoice) {
+    console.error('Invoice not found for status update:', invoiceId);
+    return;
+  }
+
+  // Calculate totals (including tax)
+  const subtotal = invoice.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const manualTax = invoice.items.reduce(
+    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
+    0
+  );
+  // Include custom tax from invoice taxes (tax profile)
+  const customTax =
+    (invoice as any).invoiceTaxes?.reduce(
+      (sum: number, tax: any) => sum + tax.amount,
+      0
+    ) || 0;
+  // Include Stripe Tax if it was used (legacy support)
+  const stripeTax = (invoice as any).totalTaxAmount || 0;
+  const totalAmount = subtotal + manualTax + customTax + stripeTax;
+
+  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
+
+  // Update invoice status
+  let newStatus = invoice.status;
+
+  if (totalPaid >= totalAmount - 0.01) {
+    // Allow small tolerance for rounding (1 cent)
+    newStatus = 'paid';
+  } else if (invoice.status === 'draft' && totalPaid > 0) {
+    // If payment was made and invoice was draft, mark as sent
+    newStatus = 'sent';
+  }
+
+  if (newStatus !== invoice.status) {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: newStatus }
+    });
+    console.log(
+      `Updated invoice ${invoiceId} status from ${invoice.status} to ${newStatus}`
+    );
+  }
 }
 
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
-  const { invoiceId } = paymentIntent.metadata;
+  const { invoiceId, organizationId } = paymentIntent.metadata;
 
   if (!invoiceId) {
     return;
   }
 
-  // Log the failure (you might want to create a payment record with failed status)
-  console.log('Payment failed for invoice:', invoiceId, paymentIntent.id);
+  // Extract failure information for logging
+  const lastPaymentError = paymentIntent.last_payment_error;
+  const failureReason = lastPaymentError?.message || 'Payment failed';
+  const failureCode = lastPaymentError?.code || 'unknown_error';
+
+  // Check if payment record exists
+  let payment = await prisma.payment.findFirst({
+    where: { stripePaymentIntentId: paymentIntent.id }
+  });
+
+  // Calculate next retry time (exponential backoff: 1h, 6h, 24h)
+  const retryIntervals = [1, 6, 24]; // hours
+  const retryCount = payment?.retryCount || 0;
+  const nextRetryHours =
+    retryIntervals[Math.min(retryCount, retryIntervals.length - 1)];
+  const nextRetryAt = new Date();
+  nextRetryAt.setHours(nextRetryAt.getHours() + nextRetryHours);
+
+  if (payment) {
+    // Update existing payment record
+    const maxRetries = payment.maxRetries || 3;
+    const shouldRetry = retryCount < maxRetries;
+
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        stripeStatus: 'failed',
+        retryCount: retryCount + 1,
+        lastRetryAt: new Date(),
+        nextRetryAt: shouldRetry ? nextRetryAt : null,
+        retryStatus: shouldRetry ? 'scheduled' : 'exhausted',
+        notes: payment.notes
+          ? `${payment.notes}\nFailed: ${failureReason} (${failureCode})`
+          : `Payment failed: ${failureReason} (${failureCode})`
+      } as any
+    });
+  } else {
+    // Create new payment record for failed payment (for tracking)
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { items: true }
+    });
+
+    if (!invoice) {
+      console.error('Invoice not found for failed payment:', invoiceId);
+      return;
+    }
+
+    const amount = paymentIntent.amount / 100; // Convert from cents
+    const maxRetries = 3;
+    const shouldRetry = retryCount < maxRetries;
+
+    payment = await prisma.payment.create({
+      data: {
+        invoiceId,
+        amount,
+        date: new Date(),
+        method: 'stripe',
+        stripePaymentIntentId: paymentIntent.id,
+        stripeCustomerId: paymentIntent.customer as string | null,
+        stripeStatus: 'failed',
+        retryCount: 0,
+        lastRetryAt: new Date(),
+        nextRetryAt: shouldRetry ? nextRetryAt : null,
+        retryStatus: shouldRetry ? 'scheduled' : null,
+        maxRetries,
+        notes: `Payment failed: ${failureReason} (${failureCode})`
+      } as any
+    });
+  }
+
+  console.log(
+    'Payment failed for invoice:',
+    invoiceId,
+    paymentIntent.id,
+    failureCode,
+    failureReason,
+    `Retry ${retryCount + 1}/${payment.maxRetries || 3}`
+  );
 }
 
 async function handleAccountUpdate(account: Stripe.Account) {
@@ -229,6 +479,7 @@ async function handleAccountUpdate(account: Stripe.Account) {
   });
 
   if (organization) {
+    const org = organization as any;
     const isComplete = account.details_submitted && account.charges_enabled;
     const status = isComplete
       ? 'active'
@@ -236,13 +487,24 @@ async function handleAccountUpdate(account: Stripe.Account) {
         ? 'pending'
         : 'incomplete';
 
+    // Preserve manual disconnects:
+    // - stripeOnboardingComplete tracks if the account has EVER been fully complete
+    // - stripeConnectEnabled is whether the org currently allows Stripe payments
+    const wasEverComplete = org.stripeOnboardingComplete;
+    const currentlyEnabled = org.stripeConnectEnabled;
+
+    // Only auto-enable the first time the account becomes complete.
+    // If the user has manually disconnected (enabled === false after completion),
+    // do not turn it back on automatically on future updates.
+    const shouldEnable = isComplete && (currentlyEnabled || !wasEverComplete);
+
     await prisma.organization.update({
       where: { id: organization.id },
       data: {
         stripeAccountStatus: status,
-        stripeConnectEnabled: isComplete,
-        stripeOnboardingComplete: isComplete,
-        stripeAccountEmail: account.email || organization.stripeAccountEmail
+        stripeConnectEnabled: shouldEnable,
+        stripeOnboardingComplete: wasEverComplete || isComplete,
+        stripeAccountEmail: account.email || org.stripeAccountEmail
       }
     });
   }

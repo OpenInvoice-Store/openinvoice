@@ -48,42 +48,41 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // If already connected, return existing account info
-    if (organization.stripeAccountId && organization.stripeConnectEnabled) {
-      try {
-        const account = await stripe.accounts.retrieve(
-          organization.stripeAccountId
-        );
-        return NextResponse.json({
-          connected: true,
-          accountId: account.id,
-          status: account.details_submitted ? 'active' : 'pending',
-          email: account.email
-        });
-      } catch (error) {
-        // Account might have been deleted, clear it
-        await prisma.organization.update({
-          where: { id: orgId },
-          data: {
-            stripeAccountId: null,
-            stripeConnectEnabled: false,
-            stripeAccountStatus: null,
-            stripeOnboardingComplete: false,
-            stripeAccountEmail: null
-          }
-        });
-      }
-    }
-
     // Get the base URL for redirect
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const returnUrl = `${baseUrl}/dashboard/settings?stripe_connected=true`;
     const refreshUrl = `${baseUrl}/dashboard/settings?stripe_refresh=true`;
 
-    // Create Stripe Connect account link
+    // Create or reuse a Stripe Connect account, then generate an onboarding link.
+    // We always drive the user through Stripe's onboarding/update flow so they
+    // can either complete setup or review/update existing details.
     let accountId = organization.stripeAccountId;
 
-    // Create account if it doesn't exist
+    // If we have an existing account ID, verify it still exists in Stripe.
+    if (accountId) {
+      try {
+        await stripe.accounts.retrieve(accountId);
+      } catch (error: any) {
+        if (error.code === 'resource_missing') {
+          // Account was deleted in Stripe – treat as no account and recreate.
+          accountId = null;
+          await prisma.organization.update({
+            where: { id: orgId },
+            data: {
+              stripeAccountId: null,
+              stripeConnectEnabled: false,
+              stripeAccountStatus: null,
+              stripeOnboardingComplete: false,
+              stripeAccountEmail: null
+            }
+          });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // Create a new account if it doesn't exist
     if (!accountId) {
       // Get country from organization or fallback to environment variable or 'US'
       const country =
@@ -114,7 +113,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Create account link for onboarding
+    // Create account link for onboarding or updating details
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: refreshUrl,

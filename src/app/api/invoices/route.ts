@@ -2,10 +2,13 @@ import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
+import { ensureUserAndOrganization } from '@/lib/clerk-sync';
+import { calculateTax, saveInvoiceTaxes } from '@/lib/tax-calculator';
 
 export async function GET(request: NextRequest) {
   try {
-    const { orgId } = await auth();
+    // Ensure user and organization exist in DB (fallback if webhook failed)
+    const orgId = await ensureUserAndOrganization();
 
     if (!orgId) {
       return NextResponse.json(
@@ -31,7 +34,8 @@ export async function GET(request: NextRequest) {
             product: true
           }
         },
-        payments: true
+        payments: true,
+        invoiceTaxes: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -48,7 +52,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { orgId } = await auth();
+    // Ensure user and organization exist in DB (fallback if webhook failed)
+    const orgId = await ensureUserAndOrganization();
 
     if (!orgId) {
       return NextResponse.json(
@@ -58,7 +63,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, items } = body;
+    const {
+      customerId,
+      dueDate,
+      issueDate,
+      status,
+      notes,
+      templateId,
+      items,
+      currency,
+      taxProfileId,
+      taxOverrides
+    } = body;
 
     if (!customerId || !dueDate || !items || items.length === 0) {
       return NextResponse.json(
@@ -79,6 +95,64 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get default template if templateId not provided (before transaction)
+    let finalTemplateId = templateId;
+    if (!finalTemplateId) {
+      const defaultTemplate = await (prisma as any).invoiceTemplate.findFirst({
+        where: {
+          organizationId: orgId,
+          isDefault: true,
+          isActive: true
+        }
+      });
+      finalTemplateId = defaultTemplate?.id || null;
+    }
+
+    // Get organization
+    const organization = await prisma.organization.findUnique({
+      where: { id: orgId }
+    });
+
+    if (!organization) {
+      return NextResponse.json(
+        { error: 'Organization not found' },
+        { status: 404 }
+      );
+    }
+
+    const org = organization as any;
+
+    // Get organization's default currency if currency not provided
+    let finalCurrency = currency;
+    if (!finalCurrency) {
+      finalCurrency = org.defaultCurrency || 'USD';
+    }
+
+    // Calculate tax using custom tax system
+    let taxCalculationResult = null;
+    let taxCalculationMethod = 'manual'; // Default to manual (using taxRate on items)
+
+    // If tax profile or overrides are provided, use custom tax calculation
+    if (taxProfileId || taxOverrides) {
+      try {
+        taxCalculationResult = await calculateTax({
+          items: items.map((item: any) => ({
+            price: parseFloat(item.price),
+            quantity: parseInt(item.quantity)
+          })),
+          customerId,
+          organizationId: orgId,
+          taxProfileId: taxProfileId || null,
+          taxOverrides: taxOverrides || undefined
+        });
+
+        taxCalculationMethod = taxOverrides ? 'override' : 'profile';
+      } catch (error) {
+        console.error('Error calculating tax:', error);
+        // Continue with manual tax calculation if custom tax fails
+      }
+    }
+
     // Create invoice with atomic counter increment
     // Single transaction, no retries needed, zero race conditions
     const invoice = await prisma.$transaction(
@@ -91,7 +165,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Create invoice with the generated number
-        return await tx.invoice.create({
+        const invoice = await tx.invoice.create({
           data: {
             invoiceNo: counter.lastInvoiceNo,
             customerId,
@@ -100,6 +174,11 @@ export async function POST(request: NextRequest) {
             issueDate: issueDate ? new Date(issueDate) : new Date(),
             status: status || 'draft',
             notes,
+            currency: finalCurrency,
+            ...(finalTemplateId && { templateId: finalTemplateId }),
+            // Custom Tax System fields
+            taxCalculationMethod: taxCalculationMethod,
+            ...(taxProfileId && { taxProfileId }),
             items: {
               create: items.map((item: any) => ({
                 productId: item.productId,
@@ -119,6 +198,20 @@ export async function POST(request: NextRequest) {
             }
           }
         });
+
+        // Save invoice taxes if custom tax was calculated
+        if (taxCalculationResult && taxCalculationResult.taxes.length > 0) {
+          await saveInvoiceTaxes(
+            invoice.id,
+            taxCalculationResult.taxes.map((tax) => ({
+              ...tax,
+              isOverride: taxCalculationMethod === 'override'
+            })),
+            tx // Pass transaction client
+          );
+        }
+
+        return invoice;
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
@@ -127,7 +220,27 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    return NextResponse.json(invoice, { status: 201 });
+    // Reload invoice with taxes to include invoiceTaxes in response
+    const invoiceWithTaxes = await prisma.invoice.findUnique({
+      where: { id: invoice.id },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            product: true
+          }
+        },
+        payments: true,
+        invoiceTaxes: true,
+        taxProfile: {
+          include: {
+            taxRules: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(invoiceWithTaxes, { status: 201 });
   } catch (error) {
     console.error('Error creating invoice:', error);
 

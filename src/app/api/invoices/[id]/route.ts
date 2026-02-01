@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { calculateTax, saveInvoiceTaxes } from '@/lib/tax-calculator';
 
 export async function GET(
   request: NextRequest,
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -21,20 +22,39 @@ export async function GET(
       where: { id, organizationId: orgId },
       include: {
         customer: true,
+        organization: {
+          select: {
+            defaultCurrency: true
+          }
+        },
         items: {
           include: {
-            product: true,
-          },
+            product: true
+          }
         },
         payments: true,
-      },
+        paymentPlan: {
+          include: {
+            installments: {
+              include: {
+                payments: true
+              },
+              orderBy: { installmentNumber: 'asc' }
+            }
+          }
+        },
+        invoiceTemplate: true,
+        invoiceTaxes: true,
+        taxProfile: {
+          include: {
+            taxRules: true
+          }
+        }
+      }
     });
 
     if (!invoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
     return NextResponse.json(invoice);
@@ -53,7 +73,7 @@ export async function PUT(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -62,10 +82,10 @@ export async function PUT(
     }
 
     const { id } = await params;
-    
+
     // Verify invoice belongs to the organization
     const existingInvoice = await prisma.invoice.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!existingInvoice) {
@@ -76,26 +96,65 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { customerId, dueDate, issueDate, status, notes, items } = body;
+    const {
+      customerId,
+      dueDate,
+      issueDate,
+      status,
+      notes,
+      templateId,
+      items,
+      currency,
+      taxProfileId,
+      taxOverrides
+    } = body;
 
     // Verify customer belongs to the organization if customerId is being updated
     if (customerId && customerId !== existingInvoice.customerId) {
       const customer = await prisma.customer.findFirst({
-        where: { id: customerId, organizationId: orgId },
+        where: { id: customerId, organizationId: orgId }
       });
 
       if (!customer) {
         return NextResponse.json(
-          { error: 'Customer not found or does not belong to your organization' },
+          {
+            error: 'Customer not found or does not belong to your organization'
+          },
           { status: 404 }
         );
       }
     }
 
-    // First, delete existing items
+    // First, delete existing items and invoice taxes
     await prisma.invoiceItem.deleteMany({
-      where: { invoiceId: id },
+      where: { invoiceId: id }
     });
+    await prisma.invoiceTax.deleteMany({
+      where: { invoiceId: id }
+    });
+
+    // Calculate tax if tax profile or overrides are provided
+    let taxCalculationResult = null;
+    let taxCalculationMethod = 'manual';
+
+    if (taxProfileId || taxOverrides) {
+      try {
+        taxCalculationResult = await calculateTax({
+          items: (items || []).map((item: any) => ({
+            price: parseFloat(item.price),
+            quantity: parseInt(item.quantity)
+          })),
+          customerId: customerId || existingInvoice.customerId,
+          organizationId: orgId,
+          taxProfileId: taxProfileId || null,
+          taxOverrides: taxOverrides || undefined
+        });
+
+        taxCalculationMethod = taxOverrides ? 'override' : 'profile';
+      } catch (error) {
+        console.error('Error calculating tax:', error);
+      }
+    }
 
     // Update invoice and recreate items
     const invoice = await prisma.invoice.update({
@@ -106,28 +165,63 @@ export async function PUT(
         issueDate: issueDate ? new Date(issueDate) : undefined,
         status,
         notes,
+        currency: currency !== undefined ? currency : undefined,
+        templateId: templateId !== undefined ? templateId || null : undefined,
+        // Custom Tax System fields
+        taxCalculationMethod: taxCalculationMethod,
+        ...(taxProfileId !== undefined && {
+          taxProfileId: taxProfileId || null
+        }),
         items: {
           create: items?.map((item: any) => ({
             productId: item.productId,
             description: item.description,
             quantity: parseInt(item.quantity),
             price: parseFloat(item.price),
-            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0,
-          })),
-        },
-      },
+            taxRate: item.taxRate ? parseFloat(item.taxRate) : 0
+          }))
+        }
+      } as any,
       include: {
         customer: true,
         items: {
           include: {
-            product: true,
-          },
+            product: true
+          }
         },
         payments: true,
-      },
+        invoiceTemplate: true
+      }
     });
 
-    return NextResponse.json(invoice);
+    // Save invoice taxes if custom tax was calculated
+    if (taxCalculationResult && taxCalculationResult.taxes.length > 0) {
+      await saveInvoiceTaxes(
+        invoice.id,
+        taxCalculationResult.taxes.map((tax) => ({
+          ...tax,
+          isOverride: taxCalculationMethod === 'override'
+        }))
+      );
+    }
+
+    // Reload invoice with taxes
+    const invoiceWithTaxes = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            product: true
+          }
+        },
+        payments: true,
+        invoiceTemplate: true,
+        invoiceTaxes: true
+      }
+    });
+
+    return NextResponse.json(invoiceWithTaxes);
   } catch (error) {
     console.error('Error updating invoice:', error);
     return NextResponse.json(
@@ -143,7 +237,7 @@ export async function DELETE(
 ) {
   try {
     const { orgId } = await auth();
-    
+
     if (!orgId) {
       return NextResponse.json(
         { error: 'Unauthorized - Organization required' },
@@ -152,10 +246,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    
+
     // Verify invoice belongs to the organization
     const invoice = await prisma.invoice.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, organizationId: orgId }
     });
 
     if (!invoice) {
@@ -166,7 +260,7 @@ export async function DELETE(
     }
 
     await prisma.invoice.delete({
-      where: { id },
+      where: { id }
     });
 
     return NextResponse.json({ success: true });
@@ -178,4 +272,3 @@ export async function DELETE(
     );
   }
 }
-
