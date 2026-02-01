@@ -16,6 +16,7 @@ import {
 } from '@tanstack/react-table';
 import { useRouter } from 'next/navigation';
 import { ExportButton } from '@/components/export-button';
+import { ImportButton } from '@/components/import-button';
 
 export function ProductsList() {
   const router = useRouter();
@@ -64,7 +65,10 @@ export function ProductsList() {
     <div className='h-[calc(100vh-250px)] min-h-[400px] w-full'>
       <DataTable table={table} onRowClick={handleRowClick}>
         <DataTableToolbar table={table}>
-          <ExportButton exportType='products' />
+          <div className='flex gap-2'>
+            <ImportButton type='products' />
+            <ExportButton exportType='products' />
+          </div>
         </DataTableToolbar>
       </DataTable>
     </div>
