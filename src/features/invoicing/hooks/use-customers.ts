@@ -100,7 +100,12 @@ export function useDeleteCustomer() {
       const res = await fetch(`/api/customers/${id}`, {
         method: 'DELETE'
       });
-      if (!res.ok) throw new Error('Failed to delete customer');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage =
+          errorData.details || errorData.error || 'Failed to delete customer';
+        throw new Error(errorMessage);
+      }
       return res.json();
     },
     onSuccess: () => {

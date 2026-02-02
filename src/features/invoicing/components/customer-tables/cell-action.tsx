@@ -38,8 +38,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
       await deleteCustomer.mutateAsync(data.id);
       toast.success('Customer deleted successfully');
       setOpen(false);
-    } catch (error) {
-      toast.error('Failed to delete customer');
+      // Navigate back to customers list after successful deletion
+      router.push('/dashboard/customers');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to delete customer';
+      toast.error(errorMessage, {
+        duration: 5000 // Show for longer since it may contain important details
+      });
     } finally {
       setLoading(false);
     }
@@ -60,19 +65,30 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             <IconDotsVertical className='h-4 w-4' />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end'>
+        <DropdownMenuContent align='end' onClick={(e) => e.stopPropagation()}>
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem
-            onClick={() => router.push(`/dashboard/customers/${data.id}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/dashboard/customers/${data.id}`);
+            }}
           >
             <IconEye className='mr-2 h-4 w-4' /> View
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => router.push(`/dashboard/customers/${data.id}/edit`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/dashboard/customers/${data.id}/edit`);
+            }}
           >
             <IconEdit className='mr-2 h-4 w-4' /> Edit
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(true);
+            }}
+          >
             <IconTrash className='mr-2 h-4 w-4' /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>

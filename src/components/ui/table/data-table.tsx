@@ -61,14 +61,16 @@ export function DataTable<TData>({
                       key={row.id}
                       data-state={row.getIsSelected() && 'selected'}
                       onClick={(e) => {
-                        // Don't trigger row click if clicking on a button, link, or input
+                        // Don't trigger row click if clicking on a button, link, input, or dropdown menu
                         const target = e.target as HTMLElement;
                         if (
                           target.closest('button') ||
                           target.closest('a') ||
                           target.closest('input') ||
                           target.closest('[role="button"]') ||
-                          target.closest('[data-no-row-click]')
+                          target.closest('[data-no-row-click]') ||
+                          target.closest('[role="menu"]') ||
+                          target.closest('[role="menuitem"]')
                         ) {
                           return;
                         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { formatDate } from '@/lib/format';
 import { formatCurrencyAmount, getInvoiceCurrency } from '@/lib/currency';
 import { Badge } from '@/components/ui/badge';
@@ -11,16 +11,9 @@ import {
   IconCalendar
 } from '@tabler/icons-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StripePaymentForm } from './stripe-payment-form';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
 import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
+import { toast } from 'sonner';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -35,8 +28,6 @@ interface InvoicePublicViewProps {
 }
 
 export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
-  const [showStripePayment, setShowStripePayment] = useState(false);
-
   // Calculate invoice totals using utility function
   const {
     subtotal,
@@ -103,6 +94,40 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
         new Date(currentInstallment.dueDate) < now
     };
   }, [invoice.paymentPlan]);
+
+  // Handle direct payment redirect to Stripe Checkout
+  const handlePayNow = useCallback(async () => {
+    const amountToPay = paymentPlanInfo?.amountDue || balance;
+
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          amount: amountToPay
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Open Stripe Checkout in a new tab
+        window.open(data.url, '_blank');
+      } else {
+        throw new Error('No checkout URL received');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create payment link');
+    }
+  }, [invoice.id, balance, paymentPlanInfo]);
 
   // Check Stripe Connect status for the organization
   const { data: stripeStatus } = useQuery({
@@ -202,7 +227,7 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                   stripeStatus?.connected &&
                   stripeStatus?.status === 'active' && (
                     <Button
-                      onClick={() => setShowStripePayment(true)}
+                      onClick={handlePayNow}
                       style={{ backgroundColor: primaryColor }}
                       className='hover:opacity-90'
                     >
@@ -694,51 +719,6 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
             </div>
           )
         )}
-
-        {/* Stripe Payment Dialog */}
-        {balance > 0 &&
-          stripeStatus?.connected &&
-          stripeStatus?.status === 'active' && (
-            <Dialog
-              open={showStripePayment}
-              onOpenChange={setShowStripePayment}
-            >
-              <DialogContent className='max-w-2xl'>
-                <DialogHeader>
-                  <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
-                  <DialogDescription>
-                    {paymentPlanInfo ? (
-                      <>
-                        Pay Installment #{paymentPlanInfo.installmentNumber} of{' '}
-                        {formatCurrencyAmount(
-                          paymentPlanInfo.amountDue,
-                          currency
-                        )}
-                        {paymentPlanInfo.isOverdue && (
-                          <span className='ml-2 text-red-600'>(Overdue)</span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        Pay the remaining balance of{' '}
-                        {formatCurrencyAmount(balance, currency)}
-                      </>
-                    )}
-                  </DialogDescription>
-                </DialogHeader>
-                <StripePaymentForm
-                  invoiceId={invoice.id}
-                  amount={paymentPlanInfo?.amountDue || balance}
-                  onSuccess={() => {
-                    setShowStripePayment(false);
-                    // Reload page to show updated balance
-                    window.location.reload();
-                  }}
-                  onCancel={() => setShowStripePayment(false)}
-                />
-              </DialogContent>
-            </Dialog>
-          )}
       </div>
     </div>
   );

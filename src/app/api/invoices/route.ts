@@ -128,17 +128,46 @@ export async function POST(request: NextRequest) {
       finalCurrency = org.defaultCurrency || 'USD';
     }
 
-    // Calculate tax using custom tax system
+    // Calculate tax using tax system (TaxJar, tax profiles, or overrides)
     let taxCalculationResult = null;
     let taxCalculationMethod = 'manual'; // Default to manual (using taxRate on items)
 
-    // If tax profile or overrides are provided, use custom tax calculation
-    if (taxProfileId || taxOverrides) {
+    // Check if TaxJar is enabled for this organization
+    const taxJarEnabled = org.taxJarEnabled || false;
+
+    // Priority: TaxJar (if enabled) > Tax Overrides > Tax Profile > Manual
+    if (taxJarEnabled && !taxOverrides && !taxProfileId) {
+      // Use TaxJar if enabled and no overrides/profile specified
       try {
         taxCalculationResult = await calculateTax({
           items: items.map((item: any) => ({
             price: parseFloat(item.price),
-            quantity: parseInt(item.quantity)
+            quantity: parseInt(item.quantity),
+            description: item.description,
+            productTaxCode: item.productTaxCode
+          })),
+          customerId,
+          organizationId: orgId,
+          useTaxJar: true,
+          shipping: 0 // Can be extended to support shipping
+        });
+
+        taxCalculationMethod = 'taxjar';
+      } catch (error) {
+        console.error('Error calculating tax with TaxJar:', error);
+        // Fall through to tax profile or manual calculation
+      }
+    }
+
+    // If TaxJar didn't work or wasn't enabled, try tax profile or overrides
+    if (!taxCalculationResult && (taxProfileId || taxOverrides)) {
+      try {
+        taxCalculationResult = await calculateTax({
+          items: items.map((item: any) => ({
+            price: parseFloat(item.price),
+            quantity: parseInt(item.quantity),
+            description: item.description,
+            productTaxCode: item.productTaxCode
           })),
           customerId,
           organizationId: orgId,

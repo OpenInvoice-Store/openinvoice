@@ -68,7 +68,8 @@ export async function PUT(request: NextRequest) {
         where: { id: orgId },
         select: {
           stripeAccountId: true,
-          stripeConnectEnabled: true
+          stripeConnectEnabled: true,
+          taxJarEnabled: true
         }
       });
 
@@ -84,6 +85,14 @@ export async function PUT(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+
+      // Mutual exclusion: Disable TaxJar if enabling Stripe Tax
+      if ((organization as any).taxJarEnabled) {
+        await prisma.organization.update({
+          where: { id: orgId },
+          data: { taxJarEnabled: false } as any
+        });
       }
     }
 

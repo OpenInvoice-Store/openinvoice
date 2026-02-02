@@ -4,15 +4,17 @@ import { calculateTax } from '@/lib/tax-calculator';
 
 /**
  * POST /api/tax/calculate
- * Calculate tax using custom tax system
+ * Calculate tax using tax system (TaxJar, tax profiles, or overrides)
  *
  * Request body:
  * {
- *   items: [{ price, quantity }],
+ *   items: [{ price, quantity, description?, productTaxCode? }],
  *   customerId: string,
  *   organizationId?: string,
  *   taxProfileId?: string,
- *   taxOverrides?: [{ name, rate, authority? }]
+ *   taxOverrides?: [{ name, rate, authority? }],
+ *   useTaxJar?: boolean, // Force TaxJar usage
+ *   shipping?: number // Shipping amount for TaxJar
  * }
  */
 export async function POST(request: NextRequest) {
@@ -29,7 +31,10 @@ export async function POST(request: NextRequest) {
       customerId,
       organizationId: providedOrgId,
       taxProfileId,
-      taxOverrides
+      taxOverrides,
+      useTaxJar,
+      useStripeTax,
+      shipping
     } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -48,16 +53,21 @@ export async function POST(request: NextRequest) {
 
     const targetOrgId = providedOrgId || orgId;
 
-    // Calculate tax using custom tax calculator
+    // Calculate tax using tax calculator (supports TaxJar, profiles, overrides)
     const result = await calculateTax({
       items: items.map((item: any) => ({
         price: parseFloat(item.price || item.amount || 0),
-        quantity: parseInt(item.quantity || 1)
+        quantity: parseInt(item.quantity || 1),
+        description: item.description,
+        productTaxCode: item.productTaxCode
       })),
       customerId,
       organizationId: targetOrgId,
       taxProfileId: taxProfileId || null,
-      taxOverrides: taxOverrides || undefined
+      taxOverrides: taxOverrides || undefined,
+      useTaxJar: useTaxJar || false,
+      useStripeTax: useStripeTax || false,
+      shipping: shipping || 0
     });
 
     return NextResponse.json({

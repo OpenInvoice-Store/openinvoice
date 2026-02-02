@@ -107,6 +107,7 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
+    "taxjar": "^4.1.0",
     "twilio": "^5.12.0",
     "typescript": "5.7.2",
     "uuid": "^11.0.3",

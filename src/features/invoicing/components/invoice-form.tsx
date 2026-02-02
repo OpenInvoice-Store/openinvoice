@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, Loader2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -77,6 +78,26 @@ export function InvoiceForm() {
   const { data: branding } = useBrandingSettings();
   const { data: templates = [] } = useInvoiceTemplates();
   const { data: taxProfiles = [] } = useTaxProfiles();
+
+  // Fetch TaxJar settings
+  const { data: taxJarSettings } = useQuery({
+    queryKey: ['taxjar-settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/organizations/taxjar');
+      if (!response.ok) return { taxJarEnabled: false, hasApiKey: false };
+      return response.json();
+    }
+  });
+
+  // Fetch Stripe Tax settings
+  const { data: stripeTaxSettings } = useQuery({
+    queryKey: ['stripe-tax-settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/organizations/stripe-tax');
+      if (!response.ok) return { stripeTaxEnabled: false };
+      return response.json();
+    }
+  });
 
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
@@ -172,17 +193,33 @@ export function InvoiceForm() {
     }
   };
 
-  // Calculate tax using custom tax system
+  // Calculate tax using custom tax system or TaxJar
   const calculateTax = useCallback(async () => {
     const items = form.watch('items');
     const customerId = form.watch('customerId');
 
-    if (
-      !selectedTaxProfileId ||
-      selectedTaxProfileId === 'none' ||
-      !customerId ||
-      items.length === 0
-    ) {
+    // Don't calculate if no customer or items
+    if (!customerId || items.length === 0) {
+      setTaxCalculationResult(null);
+      return;
+    }
+
+    // Priority: Tax Profile > Stripe Tax > TaxJar
+    // If tax profile is selected, use it (don't use Stripe Tax or TaxJar)
+    // If no tax profile but Stripe Tax is enabled, use Stripe Tax
+    // If no tax profile and no Stripe Tax but TaxJar is enabled, use TaxJar
+    const shouldUseTaxProfile =
+      selectedTaxProfileId && selectedTaxProfileId !== 'none';
+    const shouldUseStripeTax =
+      !shouldUseTaxProfile && stripeTaxSettings?.stripeTaxEnabled;
+    const shouldUseTaxJar =
+      !shouldUseTaxProfile &&
+      !shouldUseStripeTax &&
+      taxJarSettings?.taxJarEnabled &&
+      taxJarSettings?.hasApiKey;
+
+    // If none of the tax methods should be used, clear result
+    if (!shouldUseTaxProfile && !shouldUseStripeTax && !shouldUseTaxJar) {
       setTaxCalculationResult(null);
       return;
     }
@@ -195,11 +232,17 @@ export function InvoiceForm() {
         body: JSON.stringify({
           items: items.map((item) => ({
             price: item.price,
-            quantity: item.quantity
+            quantity: item.quantity,
+            description: item.description
           })),
           customerId,
-          taxProfileId:
-            selectedTaxProfileId === 'none' ? null : selectedTaxProfileId
+          taxProfileId: shouldUseTaxProfile
+            ? selectedTaxProfileId === 'none'
+              ? null
+              : selectedTaxProfileId
+            : null,
+          useTaxJar: shouldUseTaxJar || false,
+          useStripeTax: shouldUseStripeTax || false
         })
       });
 
@@ -213,24 +256,70 @@ export function InvoiceForm() {
         });
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to calculate tax');
+        const errorMessage = error.error || 'Failed to calculate tax';
+
+        // Show error for API key issues
+        if (
+          errorMessage.includes('API key') ||
+          errorMessage.includes('Unauthorized')
+        ) {
+          toast.error(errorMessage, {
+            duration: 10000,
+            action: {
+              label: 'Open Settings',
+              onClick: () => router.push('/dashboard/settings/payments')
+            }
+          });
+        }
+        // Show warning for address issues
+        else if (errorMessage.includes('Insufficient address')) {
+          toast.warning(
+            'Customer address incomplete. TaxJar needs: country + (state/ZIP for US, or state/city for international).',
+            { duration: 5000 }
+          );
+        }
+        // Show error for other issues
+        else {
+          toast.error(errorMessage);
+        }
         setTaxCalculationResult(null);
       }
     } catch (error) {
       console.error('Error calculating tax:', error);
-      toast.error('Failed to calculate tax');
+      // Don't show error toast for TaxJar address issues
       setTaxCalculationResult(null);
     } finally {
       setIsCalculatingTax(false);
     }
-  }, [selectedTaxProfileId, form, branding]);
+  }, [selectedTaxProfileId, form, branding, taxJarSettings]);
 
-  // Recalculate tax when items, customer, or tax profile changes
+  // Watch form values for tax recalculation
+  const watchedItems = useWatch({
+    control: form.control,
+    name: 'items'
+  });
+  const watchedCustomerId = useWatch({
+    control: form.control,
+    name: 'customerId'
+  });
+
+  // Recalculate tax when items, customer, tax profile, Stripe Tax, or TaxJar settings change
   useEffect(() => {
+    // Calculate if:
+    // 1. Tax profile is selected, OR
+    // 2. Stripe Tax is enabled and no tax profile is selected, OR
+    // 3. TaxJar is enabled and no tax profile/Stripe Tax is selected
+    const shouldCalculate =
+      (selectedTaxProfileId && selectedTaxProfileId !== 'none') ||
+      ((!selectedTaxProfileId || selectedTaxProfileId === 'none') &&
+        (stripeTaxSettings?.stripeTaxEnabled ||
+          (taxJarSettings?.taxJarEnabled && taxJarSettings?.hasApiKey)));
+
     if (
-      selectedTaxProfileId &&
-      selectedTaxProfileId !== 'none' &&
-      form.watch('customerId')
+      shouldCalculate &&
+      watchedCustomerId &&
+      watchedItems &&
+      watchedItems.length > 0
     ) {
       const timeoutId = setTimeout(() => {
         calculateTax();
@@ -241,9 +330,12 @@ export function InvoiceForm() {
       setTaxCalculationResult(null);
     }
   }, [
-    form.watch('items'),
-    form.watch('customerId'),
+    watchedItems,
+    watchedCustomerId,
     selectedTaxProfileId,
+    stripeTaxSettings?.stripeTaxEnabled,
+    taxJarSettings?.taxJarEnabled,
+    taxJarSettings?.hasApiKey,
     calculateTax
   ]);
 
@@ -640,7 +732,9 @@ export function InvoiceForm() {
               Tax Profile (Optional)
             </Label>
             <p className='text-muted-foreground text-sm'>
-              Select a tax profile to automatically calculate taxes
+              {taxJarSettings?.taxJarEnabled && taxJarSettings?.hasApiKey
+                ? 'Select a tax profile to override TaxJar, or leave as "None" to use TaxJar automatically'
+                : 'Select a tax profile to automatically calculate taxes'}
             </p>
             <Select
               value={selectedTaxProfileId || 'none'}
@@ -658,7 +752,11 @@ export function InvoiceForm() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value='none'>
-                  None (use manual tax rates)
+                  {stripeTaxSettings?.stripeTaxEnabled
+                    ? 'None (use Stripe Tax)'
+                    : taxJarSettings?.taxJarEnabled && taxJarSettings?.hasApiKey
+                      ? 'None (use TaxJar)'
+                      : 'None (use manual tax rates)'}
                 </SelectItem>
                 {taxProfiles.map((profile: any) => (
                   <SelectItem key={profile.id} value={profile.id}>
@@ -670,19 +768,56 @@ export function InvoiceForm() {
             </Select>
           </div>
 
-          {selectedTaxProfileId &&
-            selectedTaxProfileId !== 'none' &&
-            !form.watch('customerId') && (
-              <Alert variant='default'>
+          {/* Show message if customer not selected */}
+          {(selectedTaxProfileId && selectedTaxProfileId !== 'none') ||
+          stripeTaxSettings?.stripeTaxEnabled ||
+          (taxJarSettings?.taxJarEnabled && taxJarSettings?.hasApiKey)
+            ? !form.watch('customerId') && (
+                <Alert variant='default'>
+                  <Info className='h-4 w-4' />
+                  <AlertDescription>
+                    Please select a customer to calculate tax
+                  </AlertDescription>
+                </Alert>
+              )
+            : null}
+
+          {/* Show Stripe Tax info when enabled */}
+          {stripeTaxSettings?.stripeTaxEnabled &&
+            !selectedTaxProfileId &&
+            form.watch('customerId') && (
+              <Alert>
                 <Info className='h-4 w-4' />
                 <AlertDescription>
-                  Please select a customer to calculate tax
+                  Stripe Tax is enabled. Taxes will be calculated automatically
+                  at payment time based on the customer's address. Make sure
+                  Stripe Tax is configured in your Stripe Dashboard.
                 </AlertDescription>
               </Alert>
             )}
 
-          {selectedTaxProfileId &&
-            selectedTaxProfileId !== 'none' &&
+          {/* Show TaxJar info when enabled */}
+          {!stripeTaxSettings?.stripeTaxEnabled &&
+            taxJarSettings?.taxJarEnabled &&
+            taxJarSettings?.hasApiKey &&
+            !selectedTaxProfileId &&
+            form.watch('customerId') && (
+              <Alert>
+                <Info className='h-4 w-4' />
+                <AlertDescription>
+                  TaxJar is enabled. Taxes will be calculated automatically
+                  based on customer address.
+                </AlertDescription>
+              </Alert>
+            )}
+
+          {/* Show calculating indicator */}
+          {((selectedTaxProfileId && selectedTaxProfileId !== 'none') ||
+            (stripeTaxSettings?.stripeTaxEnabled && !selectedTaxProfileId) ||
+            (taxJarSettings?.taxJarEnabled &&
+              taxJarSettings?.hasApiKey &&
+              !selectedTaxProfileId &&
+              !stripeTaxSettings?.stripeTaxEnabled)) &&
             isCalculatingTax && (
               <div className='text-muted-foreground flex items-center gap-2 text-sm'>
                 <Loader2 className='h-4 w-4 animate-spin' />
@@ -690,34 +825,69 @@ export function InvoiceForm() {
               </div>
             )}
 
-          {selectedTaxProfileId &&
-            selectedTaxProfileId !== 'none' &&
-            taxCalculationResult &&
-            taxCalculationResult.taxes.length > 0 && (
-              <div className='bg-muted space-y-1 rounded-md p-3'>
-                {taxCalculationResult.taxes.map((tax, index) => (
-                  <div key={index} className='flex justify-between text-sm'>
-                    <span className='text-muted-foreground'>{tax.name}:</span>
-                    <span className='font-medium'>
-                      {formatCurrency(
-                        tax.amount,
-                        form.watch('currency') || 'USD'
-                      )}{' '}
-                      ({tax.rate}%)
-                    </span>
-                  </div>
-                ))}
-                <div className='mt-1 flex justify-between border-t pt-1 text-sm font-medium'>
-                  <span>Total Tax:</span>
-                  <span>
+          {/* Show Stripe Tax message */}
+          {stripeTaxSettings?.stripeTaxEnabled &&
+            !selectedTaxProfileId &&
+            form.watch('customerId') &&
+            (!taxCalculationResult || taxCalculationResult.taxAmount === 0) && (
+              <Alert>
+                <Info className='h-4 w-4' />
+                <AlertDescription>
+                  <strong>Stripe Tax Enabled:</strong> Taxes will be calculated
+                  automatically at payment time based on the customer's address.
+                  The tax amount will appear when processing the payment through
+                  Stripe.
+                </AlertDescription>
+              </Alert>
+            )}
+
+          {/* Show tax calculation results (from TaxJar or Tax Profile) */}
+          {taxCalculationResult && taxCalculationResult.taxes.length > 0 && (
+            <div className='bg-muted space-y-1 rounded-md p-3'>
+              {taxCalculationResult.taxes.map((tax, index) => (
+                <div key={index} className='flex justify-between text-sm'>
+                  <span className='text-muted-foreground flex items-center gap-1.5'>
+                    {tax.name}
+                    {selectedTaxProfileId &&
+                      selectedTaxProfileId !== 'none' && (
+                        <span className='bg-background text-muted-foreground rounded border px-1 text-xs'>
+                          Profile
+                        </span>
+                      )}
+                    {!selectedTaxProfileId &&
+                      stripeTaxSettings?.stripeTaxEnabled && (
+                        <span className='bg-background text-muted-foreground rounded border px-1 text-xs'>
+                          Stripe Tax
+                        </span>
+                      )}
+                    {!selectedTaxProfileId &&
+                      !stripeTaxSettings?.stripeTaxEnabled &&
+                      taxJarSettings?.taxJarEnabled && (
+                        <span className='bg-background text-muted-foreground rounded border px-1 text-xs'>
+                          TaxJar
+                        </span>
+                      )}
+                  </span>
+                  <span className='font-medium'>
                     {formatCurrency(
-                      taxCalculationResult.taxAmount,
+                      tax.amount,
                       form.watch('currency') || 'USD'
-                    )}
+                    )}{' '}
+                    ({tax.rate}%)
                   </span>
                 </div>
+              ))}
+              <div className='mt-1 flex justify-between border-t pt-1 text-sm font-medium'>
+                <span>Total Tax:</span>
+                <span>
+                  {formatCurrency(
+                    taxCalculationResult.taxAmount,
+                    form.watch('currency') || 'USD'
+                  )}
+                </span>
               </div>
-            )}
+            </div>
+          )}
         </div>
       )}
 

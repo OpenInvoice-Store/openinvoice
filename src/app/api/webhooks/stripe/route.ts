@@ -63,6 +63,20 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        // Checkout sessions create payment intents, so we handle via payment_intent events
+        // But we can also handle it here if needed for immediate processing
+        if (session.payment_intent) {
+          // Fetch the payment intent to get full details
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            session.payment_intent as string
+          );
+          await handlePaymentSuccess(paymentIntent);
+        }
+        break;
+      }
+
       case 'account.updated': {
         const account = event.data.object as Stripe.Account;
         await handleAccountUpdate(account);

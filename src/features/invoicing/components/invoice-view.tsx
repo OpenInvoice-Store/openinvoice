@@ -24,7 +24,7 @@ import { PaymentsList } from './payments-list';
 import { PaymentForm } from './payment-form';
 import { StripePaymentForm } from './stripe-payment-form';
 import { PaymentPlanSection } from './payment-plan-section';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   useInvoiceEmailLogs,
@@ -34,13 +34,7 @@ import {
   useSendInvoiceSMS
 } from '../hooks/use-invoice-actions';
 import { useStripeConnectStatus } from '../hooks/use-stripe';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
+import { useQueryClient } from '@tanstack/react-query';
 import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 const statusColors: Record<string, string> = {
@@ -58,8 +52,8 @@ export function InvoiceView() {
   const id = params?.id as string;
   const invoiceQuery = useInvoice(id);
   const { data: invoice, isLoading } = invoiceQuery;
-  const [showStripePayment, setShowStripePayment] = useState(false);
   const [activeSection, setActiveSection] = useState<InvoiceSection>('details');
+  const queryClient = useQueryClient();
 
   const { data: stripeStatus } = useStripeConnectStatus();
   const { data: emailLogs = [], refetch: refetchEmailLogs } =
@@ -68,6 +62,82 @@ export function InvoiceView() {
   const sendEmail = useSendInvoiceEmail();
   const sendReminder = useSendInvoiceReminder();
   const sendSMS = useSendInvoiceSMS();
+
+  // Handle direct payment redirect to Stripe Checkout
+  const handlePayNow = useCallback(async () => {
+    if (!invoice) return;
+
+    const invoiceTotals = calculateInvoiceTotals(invoice as any);
+    const balance = invoiceTotals.balance;
+
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          invoiceId: id,
+          amount: balance
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Open Stripe Checkout in a new tab
+        window.open(data.url, '_blank');
+      } else {
+        throw new Error('No checkout URL received');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create payment link');
+    }
+  }, [id, invoice]);
+
+  // Function to refresh payment data after successful payment
+  // Since Stripe processes payments via webhook, we poll a few times to wait for it
+  const refreshPaymentData = useCallback(async () => {
+    // Immediately invalidate and refetch
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['payments', id] }),
+      queryClient.invalidateQueries({ queryKey: ['invoice', id] }),
+      queryClient.invalidateQueries({ queryKey: ['invoices'] }),
+      invoiceQuery.refetch(),
+      refetchEmailLogs()
+    ]);
+
+    // Poll for payment to appear (webhook might take a moment)
+    let attempts = 0;
+    const maxAttempts = 5;
+    const pollInterval = 1000; // 1 second
+
+    const pollForPayment = async () => {
+      if (attempts >= maxAttempts) {
+        return;
+      }
+
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+      // Refetch payments
+      await queryClient.invalidateQueries({ queryKey: ['payments', id] });
+      await queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+
+      // Continue polling
+      if (attempts < maxAttempts) {
+        await pollForPayment();
+      }
+    };
+
+    // Start polling
+    pollForPayment();
+  }, [id, queryClient, invoiceQuery, refetchEmailLogs]);
 
   const handleDownloadPDF = () => {
     window.open(`/api/invoices/${id}/pdf`, '_blank');
@@ -188,7 +258,7 @@ export function InvoiceView() {
             stripeStatus?.status === 'active' && (
               <Button
                 variant='default'
-                onClick={() => setShowStripePayment(true)}
+                onClick={handlePayNow}
                 className='bg-green-600 hover:bg-green-700'
               >
                 <IconCurrencyDollar className='mr-2 h-4 w-4' />
@@ -541,12 +611,9 @@ export function InvoiceView() {
                       <StripePaymentForm
                         invoiceId={id}
                         amount={balance}
-                        onSuccess={() => {
-                          refetchEmailLogs();
-                          invoiceQuery.refetch();
-                          toast.success('Payment processed successfully!');
+                        onSuccess={async () => {
+                          await refreshPaymentData();
                         }}
-                        onCancel={() => undefined}
                       />
                     ) : null}
                     <div className='text-muted-foreground text-sm'>
@@ -555,9 +622,8 @@ export function InvoiceView() {
                     <PaymentForm
                       invoiceId={id}
                       maxAmount={balance}
-                      onSuccess={() => {
-                        refetchEmailLogs();
-                        invoiceQuery.refetch();
+                      onSuccess={async () => {
+                        await refreshPaymentData();
                       }}
                     />
                   </div>
@@ -929,30 +995,6 @@ export function InvoiceView() {
           )}
         </div>
       </div>
-
-      {/* Stripe Payment Dialog */}
-      <Dialog open={showStripePayment} onOpenChange={setShowStripePayment}>
-        <DialogContent className='max-w-2xl'>
-          <DialogHeader>
-            <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
-            <DialogDescription>
-              Pay the remaining balance of{' '}
-              {formatCurrencyAmount(balance, currency)}
-            </DialogDescription>
-          </DialogHeader>
-          <StripePaymentForm
-            invoiceId={id}
-            amount={balance}
-            onSuccess={() => {
-              setShowStripePayment(false);
-              refetchEmailLogs();
-              invoiceQuery.refetch();
-              toast.success('Payment processed successfully!');
-            }}
-            onCancel={() => setShowStripePayment(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

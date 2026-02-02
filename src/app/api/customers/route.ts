@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { ensureUserAndOrganization } from '@/lib/clerk-sync';
+import { normalizeCountryCode } from '@/constants/countries';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,6 +58,12 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       address,
+      addressLine1,
+      addressLine2,
+      city,
+      state,
+      postalCode,
+      country,
       taxExempt,
       taxExemptionReason,
       taxId
@@ -72,6 +79,12 @@ export async function POST(request: NextRequest) {
         email,
         phone,
         address,
+        addressLine1: addressLine1 || undefined,
+        addressLine2: addressLine2 || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        postalCode: postalCode || undefined,
+        country: country ? normalizeCountryCode(country) : undefined,
         organizationId: orgId,
         ...(taxExempt !== undefined && { taxExempt }),
         ...(taxExemptionReason !== undefined && { taxExemptionReason }),

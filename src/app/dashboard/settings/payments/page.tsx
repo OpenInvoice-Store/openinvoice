@@ -14,6 +14,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,6 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Info,
   CheckCircle2,
@@ -35,6 +46,7 @@ import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TaxProfileSettings } from '@/features/invoicing/components/tax-profile-settings';
 import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
+import { COUNTRIES } from '@/constants/countries';
 
 interface StripeConnectStatus {
   connected: boolean;
@@ -52,34 +64,8 @@ export default function PaymentsSettingsPage() {
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Common countries supported by Stripe (ISO 2-letter codes)
-  const supportedCountries = [
-    { code: 'US', name: 'United States' },
-    { code: 'CA', name: 'Canada' },
-    { code: 'GB', name: 'United Kingdom' },
-    { code: 'AU', name: 'Australia' },
-    { code: 'NZ', name: 'New Zealand' },
-    { code: 'IE', name: 'Ireland' },
-    { code: 'FR', name: 'France' },
-    { code: 'DE', name: 'Germany' },
-    { code: 'IT', name: 'Italy' },
-    { code: 'ES', name: 'Spain' },
-    { code: 'NL', name: 'Netherlands' },
-    { code: 'BE', name: 'Belgium' },
-    { code: 'AT', name: 'Austria' },
-    { code: 'FI', name: 'Finland' },
-    { code: 'SE', name: 'Sweden' },
-    { code: 'NO', name: 'Norway' },
-    { code: 'DK', name: 'Denmark' },
-    { code: 'PL', name: 'Poland' },
-    { code: 'PT', name: 'Portugal' },
-    { code: 'CH', name: 'Switzerland' },
-    { code: 'SG', name: 'Singapore' },
-    { code: 'HK', name: 'Hong Kong' },
-    { code: 'JP', name: 'Japan' },
-    { code: 'MX', name: 'Mexico' },
-    { code: 'BR', name: 'Brazil' }
-  ];
+  // Use shared countries constant
+  const supportedCountries = COUNTRIES;
 
   // Fetch organization country
   const { data: countryData } = useQuery({
@@ -526,24 +512,58 @@ export default function PaymentsSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Stripe Tax Settings */}
+        {/* Tax Settings - Tab Navigation */}
         <Card>
           <CardHeader>
             <div className='flex items-center justify-between'>
               <div>
                 <CardTitle className='flex items-center gap-2'>
                   <Receipt className='h-5 w-5' />
-                  Stripe Tax
+                  Tax Calculation
                 </CardTitle>
                 <CardDescription>
-                  Enable automatic tax calculation using Stripe Tax. Requires
-                  Stripe Connect to be connected.
+                  Configure automatic tax calculation services or create custom
+                  tax profiles
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className='space-y-4'>
-            <StripeTaxSettings stripeStatus={stripeStatus} />
+          <CardContent>
+            <Tabs defaultValue='taxjar' className='w-full'>
+              <TabsList className='grid w-full grid-cols-2'>
+                <TabsTrigger value='taxjar'>TaxJar</TabsTrigger>
+                <TabsTrigger value='profiles'>Tax Profiles</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value='taxjar' className='mt-6'>
+                <div className='space-y-4'>
+                  <div className='mb-4'>
+                    <h3 className='text-lg font-semibold'>
+                      TaxJar Integration
+                    </h3>
+                    <p className='text-muted-foreground text-sm'>
+                      Enable automatic tax calculation using TaxJar. Provides
+                      accurate sales tax rates for US and international taxes.
+                    </p>
+                  </div>
+                  <TaxJarSettings />
+                </div>
+              </TabsContent>
+
+              <TabsContent value='profiles' className='mt-6'>
+                <div className='space-y-4'>
+                  <div className='mb-4'>
+                    <h3 className='text-lg font-semibold'>Tax Profiles</h3>
+                    <p className='text-muted-foreground text-sm'>
+                      Create custom tax profiles with manual tax rates. Use
+                      these when you need specific tax rules or when automatic
+                      tax services aren't available.
+                    </p>
+                  </div>
+                  <TaxProfileSettings />
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
@@ -551,54 +571,110 @@ export default function PaymentsSettingsPage() {
   );
 }
 
-// Stripe Tax Settings Component
-function StripeTaxSettings({
-  stripeStatus
-}: {
-  stripeStatus?: StripeConnectStatus;
-}) {
+// TaxJar Settings Component
+function TaxJarSettings() {
   const queryClient = useQueryClient();
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingToggle, setPendingToggle] = useState<boolean | null>(null);
+  const [nexusRegions, setNexusRegions] = useState<
+    Array<{
+      country: string;
+      state?: string;
+      zip?: string;
+      city?: string;
+      street?: string;
+    }>
+  >([]);
+  const [newNexusRegion, setNewNexusRegion] = useState({
+    country: 'US',
+    state: '',
+    zip: '',
+    city: '',
+    street: ''
+  });
 
-  // Fetch Stripe Tax settings
-  const { data: taxSettings, isLoading } = useQuery({
-    queryKey: ['stripe-tax-settings'],
+  // Fetch TaxJar settings
+  const { data: taxJarSettings, isLoading } = useQuery({
+    queryKey: ['taxjar-settings'],
     queryFn: async () => {
-      const response = await fetch('/api/organizations/stripe-tax');
-      if (!response.ok) throw new Error('Failed to fetch tax settings');
+      const response = await fetch('/api/organizations/taxjar');
+      if (!response.ok) throw new Error('Failed to fetch TaxJar settings');
       return response.json();
     }
   });
 
-  // Update Stripe Tax settings
-  const updateTaxSettings = useMutation({
+  // Fetch Stripe Tax settings to check mutual exclusion
+  const { data: taxSettings } = useQuery({
+    queryKey: ['stripe-tax-settings'],
+    queryFn: async () => {
+      const response = await fetch('/api/organizations/stripe-tax');
+      if (!response.ok) return { stripeTaxEnabled: false };
+      return response.json();
+    }
+  });
+
+  // Initialize nexus regions from settings
+  useEffect(() => {
+    if (taxJarSettings?.taxJarNexusRegions) {
+      setNexusRegions(taxJarSettings.taxJarNexusRegions);
+    }
+  }, [taxJarSettings]);
+
+  // Update TaxJar settings
+  const updateTaxJarSettings = useMutation({
     mutationFn: async (data: {
-      stripeTaxEnabled?: boolean;
-      taxRegistrationNumber?: string;
+      taxJarEnabled?: boolean;
+      taxJarApiKey?: string;
+      taxJarNexusRegions?: Array<{
+        country: string;
+        state?: string;
+        zip?: string;
+        city?: string;
+        street?: string;
+      }>;
     }) => {
-      const response = await fetch('/api/organizations/stripe-tax', {
+      const response = await fetch('/api/organizations/taxjar', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to update tax settings');
+        throw new Error(error.error || 'Failed to update TaxJar settings');
       }
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['stripe-tax-settings'] });
-      toast.success('Tax settings updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['taxjar-settings'] });
+      toast.success('TaxJar settings updated successfully');
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Failed to update tax settings');
+      toast.error(error.message || 'Failed to update TaxJar settings');
     }
   });
 
-  const canEnableTax =
-    stripeStatus?.connected &&
-    stripeStatus?.chargesEnabled &&
-    taxSettings?.stripeConnectEnabled;
+  const handleAddNexusRegion = () => {
+    if (!newNexusRegion.country) {
+      toast.error('Country is required');
+      return;
+    }
+    const updated = [...nexusRegions, { ...newNexusRegion }];
+    setNexusRegions(updated);
+    updateTaxJarSettings.mutate({ taxJarNexusRegions: updated });
+    setNewNexusRegion({
+      country: 'US',
+      state: '',
+      zip: '',
+      city: '',
+      street: ''
+    });
+  };
+
+  const handleRemoveNexusRegion = (index: number) => {
+    const updated = nexusRegions.filter((_, i) => i !== index);
+    setNexusRegions(updated);
+    updateTaxJarSettings.mutate({ taxJarNexusRegions: updated });
+  };
 
   if (isLoading) {
     return <div className='text-muted-foreground text-sm'>Loading...</div>;
@@ -606,21 +682,12 @@ function StripeTaxSettings({
 
   return (
     <div className='space-y-4'>
-      {!stripeStatus?.connected && (
+      {taxSettings?.stripeTaxEnabled && (
         <Alert variant='default'>
           <Info className='h-4 w-4' />
           <AlertDescription>
-            You must connect your Stripe account before enabling Stripe Tax.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {stripeStatus?.connected && !stripeStatus?.chargesEnabled && (
-        <Alert variant='default'>
-          <Info className='h-4 w-4' />
-          <AlertDescription>
-            Your Stripe account must have charges enabled to use Stripe Tax.
-            Please complete your Stripe account setup.
+            Stripe Tax is currently enabled. Enabling TaxJar will automatically
+            disable Stripe Tax.
           </AlertDescription>
         </Alert>
       )}
@@ -628,76 +695,288 @@ function StripeTaxSettings({
       <div className='space-y-4'>
         <div className='flex items-center justify-between rounded-lg border p-4'>
           <div className='space-y-0.5'>
-            <Label htmlFor='stripe-tax-enabled' className='text-base'>
-              Enable Stripe Tax
+            <Label htmlFor='taxjar-enabled' className='text-base'>
+              Enable TaxJar
             </Label>
             <p className='text-muted-foreground text-sm'>
-              Automatically calculate taxes based on customer location and
-              product type
+              Automatically calculate accurate sales tax rates based on customer
+              location
             </p>
           </div>
           <Switch
-            id='stripe-tax-enabled'
-            checked={taxSettings?.stripeTaxEnabled || false}
-            disabled={!canEnableTax || updateTaxSettings.isPending}
+            id='taxjar-enabled'
+            checked={taxJarSettings?.taxJarEnabled || false}
+            disabled={updateTaxJarSettings.isPending}
             onCheckedChange={(checked) => {
-              updateTaxSettings.mutate({ stripeTaxEnabled: checked });
+              if (checked && taxSettings?.stripeTaxEnabled) {
+                // Show confirmation dialog when Stripe Tax is enabled
+                setPendingToggle(checked);
+                setShowConfirmDialog(true);
+              } else if (!checked) {
+                // Allow disabling without confirmation
+                updateTaxJarSettings.mutate({ taxJarEnabled: checked });
+              } else {
+                // Enable when Stripe Tax is not enabled
+                updateTaxJarSettings.mutate({ taxJarEnabled: checked });
+              }
             }}
           />
         </div>
 
-        {taxSettings?.stripeTaxEnabled && (
-          <div className='space-y-2'>
-            <Label htmlFor='tax-registration-number'>
-              Tax Registration Number
-            </Label>
-            <Input
-              id='tax-registration-number'
-              placeholder='e.g., VAT, GST, EIN'
-              value={taxSettings?.taxRegistrationNumber || ''}
-              onChange={(e) => {
-                updateTaxSettings.mutate({
-                  taxRegistrationNumber: e.target.value || undefined
-                });
+        {taxJarSettings?.taxJarEnabled && (
+          <>
+            <div className='space-y-2'>
+              <Label htmlFor='taxjar-api-key'>TaxJar API Key</Label>
+              <Input
+                id='taxjar-api-key'
+                type='password'
+                placeholder={
+                  taxJarSettings?.hasApiKey
+                    ? '••••••••••••••••'
+                    : 'Enter your TaxJar API key'
+                }
+                onChange={(e) => {
+                  const value = e.target.value.trim();
+                  if (value) {
+                    updateTaxJarSettings.mutate({ taxJarApiKey: value });
+                  }
+                }}
+                disabled={updateTaxJarSettings.isPending}
+              />
+              <p className='text-muted-foreground text-xs'>
+                {taxJarSettings?.hasApiKey
+                  ? 'API key is configured. Enter a new key to update it.'
+                  : 'Get your API key from https://app.taxjar.com/account#api-access. If not set here, the global TAXJAR_API_KEY environment variable will be used.'}
+                <br />
+                {taxJarSettings?.isSandbox && (
+                  <span className='text-muted-foreground/80 mt-1 flex items-center gap-1'>
+                    <span className='rounded bg-yellow-500/20 px-1.5 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-400'>
+                      SANDBOX MODE
+                    </span>
+                    Using sandbox API: https://api.sandbox.taxjar.com
+                  </span>
+                )}
+                {!taxJarSettings?.isSandbox && taxJarSettings?.hasApiKey && (
+                  <span className='text-muted-foreground/80 mt-1 flex items-center gap-1'>
+                    <span className='rounded bg-green-500/20 px-1.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400'>
+                      PRODUCTION MODE
+                    </span>
+                    Using production API: https://api.taxjar.com
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Nexus Regions */}
+            <div className='space-y-2'>
+              <Label>Nexus Regions</Label>
+              <p className='text-muted-foreground text-xs'>
+                Add locations where you have tax obligations (nexus). TaxJar
+                will calculate tax for customers in these regions.
+              </p>
+
+              {/* Existing Nexus Regions */}
+              {nexusRegions.length > 0 && (
+                <div className='space-y-2'>
+                  {nexusRegions.map((region, index) => (
+                    <div
+                      key={index}
+                      className='bg-muted/50 flex items-center justify-between rounded-lg border p-3'
+                    >
+                      <div className='flex items-center gap-2 text-sm'>
+                        <span className='font-medium'>
+                          {region.country}
+                          {region.state && `, ${region.state}`}
+                          {region.city && `, ${region.city}`}
+                          {region.zip && ` ${region.zip}`}
+                        </span>
+                      </div>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => handleRemoveNexusRegion(index)}
+                        disabled={updateTaxJarSettings.isPending}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add New Nexus Region */}
+              <div className='space-y-2 rounded-lg border p-4'>
+                <Label className='text-sm font-medium'>Add Nexus Region</Label>
+                <div className='grid grid-cols-2 gap-2'>
+                  <div>
+                    <Label htmlFor='nexus-country' className='text-xs'>
+                      Country *
+                    </Label>
+                    <Select
+                      value={newNexusRegion.country}
+                      onValueChange={(value) =>
+                        setNewNexusRegion({ ...newNexusRegion, country: value })
+                      }
+                    >
+                      <SelectTrigger id='nexus-country'>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map((country) => (
+                          <SelectItem key={country.code} value={country.code}>
+                            {country.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newNexusRegion.country === 'US' && (
+                    <div>
+                      <Label htmlFor='nexus-state' className='text-xs'>
+                        State
+                      </Label>
+                      <Input
+                        id='nexus-state'
+                        placeholder='e.g., CA, NY'
+                        value={newNexusRegion.state}
+                        onChange={(e) =>
+                          setNewNexusRegion({
+                            ...newNexusRegion,
+                            state: e.target.value.toUpperCase()
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <Label htmlFor='nexus-city' className='text-xs'>
+                      City
+                    </Label>
+                    <Input
+                      id='nexus-city'
+                      placeholder='City name'
+                      value={newNexusRegion.city}
+                      onChange={(e) =>
+                        setNewNexusRegion({
+                          ...newNexusRegion,
+                          city: e.target.value
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor='nexus-zip' className='text-xs'>
+                      ZIP/Postal Code
+                    </Label>
+                    <Input
+                      id='nexus-zip'
+                      placeholder='ZIP code'
+                      value={newNexusRegion.zip}
+                      onChange={(e) =>
+                        setNewNexusRegion({
+                          ...newNexusRegion,
+                          zip: e.target.value
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={handleAddNexusRegion}
+                  disabled={
+                    updateTaxJarSettings.isPending || !newNexusRegion.country
+                  }
+                  className='w-full'
+                >
+                  Add Nexus Region
+                </Button>
+              </div>
+            </div>
+
+            <Alert>
+              <Info className='h-4 w-4' />
+              <AlertDescription>
+                <strong>How TaxJar Works:</strong>
+                <ul className='mt-2 list-disc space-y-1 pl-5'>
+                  <li>
+                    TaxJar automatically calculates accurate tax rates based on
+                    customer shipping address
+                  </li>
+                  <li>
+                    Supports US sales tax (state, county, city, special
+                    districts) and international taxes (VAT, GST, etc.)
+                  </li>
+                  <li>
+                    Tax rates are updated automatically as tax laws change
+                  </li>
+                  <li>
+                    Make sure customer addresses include complete address
+                    information (street, city, state, ZIP) for best results
+                  </li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+          </>
+        )}
+      </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable Stripe Tax?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enabling TaxJar will automatically disable Stripe Tax. Tax
+              calculations will switch from Stripe Tax to TaxJar. Are you sure
+              you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setPendingToggle(null);
               }}
-              disabled={updateTaxSettings.isPending}
-            />
-            <p className='text-muted-foreground text-xs'>
-              Your tax registration number (VAT, GST, EIN, etc.) for tax
-              reporting
-            </p>
-          </div>
-        )}
-
-        {taxSettings?.stripeTaxEnabled && (
-          <Alert>
-            <Info className='h-4 w-4' />
-            <AlertDescription>
-              <strong>Next Steps:</strong>
-              <ul className='mt-2 list-disc space-y-1 pl-5'>
-                <li>
-                  Enable Stripe Tax in your{' '}
-                  <a
-                    href='https://dashboard.stripe.com/tax/settings'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='font-medium underline hover:no-underline'
-                  >
-                    Stripe Dashboard
-                  </a>
-                </li>
-                <li>Configure your tax registration numbers in Stripe</li>
-                <li>Set up product tax codes for accurate tax calculation</li>
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      {/* Custom Tax System */}
-      <div className='mt-8'>
-        <TaxProfileSettings />
-      </div>
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowConfirmDialog(false);
+                // Disable Stripe Tax first, then enable TaxJar
+                fetch('/api/organizations/stripe-tax', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ stripeTaxEnabled: false })
+                })
+                  .then(() => {
+                    queryClient.invalidateQueries({
+                      queryKey: ['stripe-tax-settings']
+                    });
+                    if (pendingToggle !== null) {
+                      updateTaxJarSettings.mutate({
+                        taxJarEnabled: pendingToggle
+                      });
+                    }
+                    setPendingToggle(null);
+                  })
+                  .catch((error) => {
+                    toast.error(
+                      'Failed to disable Stripe Tax: ' + error.message
+                    );
+                    setPendingToggle(null);
+                  });
+              }}
+            >
+              Yes, Enable TaxJar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

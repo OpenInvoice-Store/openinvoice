@@ -42,6 +42,7 @@ This application is built with the following technologies:
 - **Database** - PostgreSQL with [Prisma](https://www.prisma.io)
 - **Email Service** - [Resend](https://resend.com) for transactional emails
 - **Payment Processing** - [Stripe](https://stripe.com) with Connect for multi-tenant payments
+- **Tax Calculation** - [TaxJar](https://www.taxjar.com) for automatic tax calculation (optional)
 - **Error Tracking** - [Sentry](https://sentry.io/for/nextjs/)
 - **Styling** - [Tailwind CSS v4](https://tailwindcss.com)
 - **UI Components** - [Shadcn UI](https://ui.shadcn.com)
@@ -126,6 +127,7 @@ src/
    - Resend webhook key (`RESEND_WEBHOOK_KEY`) for email event tracking
    - Stripe keys (`STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`) for payment processing
    - Stripe webhook secret (`STRIPE_WEBHOOK_SECRET`) for webhook verification
+   - TaxJar API key (`TAXJAR_API_KEY`) for automatic tax calculation (optional)
    - AWS S3 credentials (for file uploads, if applicable)
    - Sentry DSN (for error tracking, optional)
 
@@ -272,6 +274,16 @@ For detailed setup instructions, see:
 
 ### Tax Management
 
+- **TaxJar Integration** - Automatic tax calculation using TaxJar API
+  - **Real-time Tax Calculation** - Automatic tax calculation based on customer and business addresses
+  - **Nexus Region Support** - Configure nexus regions for accurate tax calculation
+  - **Multi-jurisdiction Support** - Supports US, Canada, EU, and international tax calculations
+  - **Product Tax Codes** - Support for product-specific tax codes (exempt items, reduced rates)
+  - **Sandbox Mode** - Test mode support for development and testing
+  - **Address Validation** - Automatic address parsing and validation for accurate tax calculation
+  - **Tax Transaction Tracking** - Store TaxJar transaction IDs for audit and reporting
+  - **Fallback Support** - Falls back to custom tax profiles if TaxJar is unavailable
+
 - **Custom Tax System** - Built-in tax calculation engine without third-party dependencies
   - **Tax Profiles** - Create tax profiles for different jurisdictions (country + region)
   - **Multiple Tax Rules** - Define multiple tax rules per profile (e.g., GST + PST, VAT + local tax)
@@ -289,6 +301,12 @@ For detailed setup instructions, see:
   - **Default Tax Profile** - Set default tax profile per organization
   - **Tax Authority Labels** - Categorize taxes by authority type (federal, state, provincial, VAT, local)
   - **User-Controlled** - Simple, explicit tax system where business owners choose appropriate taxes
+
+- **Tax Calculation Methods** - Flexible tax calculation with priority system:
+  1. **TaxJar** (if enabled) - Automatic real-time tax calculation
+  2. **Tax Overrides** - Manual tax rates for specific invoices
+  3. **Tax Profiles** - Custom tax rules per jurisdiction
+  4. **Manual** - Item-level tax rates (fallback)
 
 ## Roadmap
 
@@ -408,15 +426,26 @@ For detailed setup instructions, see:
     - [x] Currency support for recurring invoices and templates ✅
     - [x] Currency display in recurring invoice tables and detail pages ✅
     - [x] Support for 20+ currencies (USD, EUR, GBP, JPY, CAD, etc.) ✅
-  - [x] **Custom Tax System** ✅
-    - [x] Tax profile management with country and region support ✅
-    - [x] Multiple tax rules per profile (GST, PST, VAT, etc.) ✅
-    - [x] Tax presets for common regions (Canada, US, EU, UK, Australia, India) ✅
-    - [x] Tax calculation engine with percentage-based rates ✅
-    - [x] Tax breakdown display in invoices, PDFs, and emails ✅
-    - [x] Manual tax override support ✅
-    - [x] Tax exemption support for customers ✅
-    - [x] Default tax profile per organization ✅
+  - [x] **Tax Calculation System** ✅
+    - [x] **TaxJar Integration** ✅
+      - [x] TaxJar API integration for automatic tax calculation ✅
+      - [x] Real-time tax calculation based on addresses ✅
+      - [x] Nexus region configuration ✅
+      - [x] Product tax code support ✅
+      - [x] Sandbox mode for testing ✅
+      - [x] Tax transaction tracking and storage ✅
+      - [x] Address parsing and validation ✅
+      - [x] Multi-jurisdiction support (US, Canada, EU, international) ✅
+    - [x] **Custom Tax System** ✅
+      - [x] Tax profile management with country and region support ✅
+      - [x] Multiple tax rules per profile (GST, PST, VAT, etc.) ✅
+      - [x] Tax presets for common regions (Canada, US, EU, UK, Australia, India) ✅
+      - [x] Tax calculation engine with percentage-based rates ✅
+      - [x] Tax breakdown display in invoices, PDFs, and emails ✅
+      - [x] Manual tax override support ✅
+      - [x] Tax exemption support for customers ✅
+      - [x] Default tax profile per organization ✅
+    - [x] Flexible tax calculation priority (TaxJar → Overrides → Profiles → Manual) ✅
   - [ ] Payment dispute management
   - [ ] Compliance reporting (GDPR, PCI-DSS)
 - [x] **Branding & Templates** ✅

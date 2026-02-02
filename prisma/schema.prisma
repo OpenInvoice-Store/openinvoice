@@ -31,6 +31,15 @@ model Customer {
   taxExempt          Boolean @default(false) // Whether customer is tax exempt
   taxExemptionReason String? // Reason for tax exemption (e.g., "nonprofit", "export")
   taxId              String? // Customer's tax ID number (for tax reporting)
+  
+  // Address fields for tax calculation (TaxJar, etc.)
+  // Note: address field above is a free-form string. These fields provide structured data.
+  addressLine1       String? // Street address line 1
+  addressLine2       String? // Street address line 2
+  city               String? // City
+  state              String? // State/Province code (e.g., CA, NY, ON)
+  postalCode         String? // ZIP/Postal code
+  country            String? // ISO country code (e.g., US, CA, GB)
 
   @@map("customers")
 }
@@ -97,10 +106,14 @@ model Invoice {
   taxBreakdown           String? // JSON string containing detailed tax breakdown from Stripe
 
   // Custom Tax System
-  taxCalculationMethod String? // "manual" | "profile" | "override" - how tax was calculated
+  taxCalculationMethod String? // "manual" | "profile" | "override" | "taxjar" - how tax was calculated
   taxProfileId         String? // Tax profile used (if taxCalculationMethod is "profile")
   taxProfile           TaxProfile?  @relation(fields: [taxProfileId], references: [id], onDelete: SetNull)
   invoiceTaxes         InvoiceTax[] // Tax breakdown for this invoice
+  
+  // TaxJar fields
+  taxJarTransactionId String? // TaxJar transaction ID for this invoice
+  taxJarTransactionReference String? // TaxJar transaction reference
 
   @@unique([organizationId, invoiceNo])
   @@index([organizationId, createdAt])
@@ -220,6 +233,11 @@ model Organization {
   taxProfiles         TaxProfile[] // Tax profiles for this organization
   defaultTaxProfileId String? // Default tax profile ID
   defaultTaxProfile   TaxProfile?  @relation("DefaultTaxProfile", fields: [defaultTaxProfileId], references: [id], onDelete: SetNull)
+
+  // TaxJar Integration
+  taxJarEnabled Boolean @default(false) // Enable automatic tax calculation via TaxJar
+  taxJarApiKey  String? // TaxJar API key (if not set, uses TAXJAR_API_KEY from env)
+  taxJarNexusRegions String? // JSON array of nexus regions for TaxJar (e.g., [{"country": "US", "state": "CA"}])
 
   invoiceTemplates InvoiceTemplate[] // Invoice templates
 

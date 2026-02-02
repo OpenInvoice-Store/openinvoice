@@ -2,35 +2,66 @@
 
 import { useParams } from 'next/navigation';
 import { useInvoice } from '@/features/invoicing/hooks/use-invoices';
-import { formatCurrency } from '@/lib/format';
-import { getInvoiceCurrency } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentsList } from '@/features/invoicing/components/payments-list';
 import { PaymentForm } from '@/features/invoicing/components/payment-form';
 import { StripePaymentForm } from '@/features/invoicing/components/stripe-payment-form';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
 import { useInvoiceEmailLogs } from '@/features/invoicing/hooks/use-invoice-actions';
 import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function InvoicePaymentsPage() {
   const params = useParams();
   const id = params?.id as string;
   const invoiceQuery = useInvoice(id);
   const { data: invoice, isLoading } = invoiceQuery;
-  const [showStripePayment, setShowStripePayment] = useState(false);
+  const queryClient = useQueryClient();
 
   // Use existing hooks for data fetching
   const { data: stripeStatus } = useStripeConnectStatus();
   const { refetch: refetchEmailLogs } = useInvoiceEmailLogs(id);
+
+  // Function to refresh payment data after successful payment
+  // Since Stripe processes payments via webhook, we poll a few times to wait for it
+  const refreshPaymentData = useCallback(async () => {
+    // Immediately invalidate and refetch
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['payments', id] }),
+      queryClient.invalidateQueries({ queryKey: ['invoice', id] }),
+      queryClient.invalidateQueries({ queryKey: ['invoices'] }),
+      invoiceQuery.refetch(),
+      refetchEmailLogs()
+    ]);
+
+    // Poll for payment to appear (webhook might take a moment)
+    let attempts = 0;
+    const maxAttempts = 5;
+    const pollInterval = 1000; // 1 second
+
+    const pollForPayment = async () => {
+      if (attempts >= maxAttempts) {
+        return;
+      }
+
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+      // Refetch payments
+      await queryClient.invalidateQueries({ queryKey: ['payments', id] });
+      await queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+
+      // Continue polling
+      if (attempts < maxAttempts) {
+        await pollForPayment();
+      }
+    };
+
+    // Start polling
+    pollForPayment();
+  }, [id, queryClient, invoiceQuery, refetchEmailLogs]);
 
   if (isLoading) {
     return <div className='p-4'>Loading...</div>;
@@ -42,10 +73,6 @@ export default function InvoicePaymentsPage() {
 
   // Calculate invoice totals using utility function
   const { balance } = calculateInvoiceTotals(invoice);
-  const currency = getInvoiceCurrency(
-    invoice as any,
-    (invoice as any).organization?.defaultCurrency
-  );
 
   return (
     <div className='space-y-6 p-6'>
@@ -61,12 +88,10 @@ export default function InvoicePaymentsPage() {
                   <StripePaymentForm
                     invoiceId={id}
                     amount={balance}
-                    onSuccess={() => {
-                      refetchEmailLogs();
-                      invoiceQuery.refetch();
+                    onSuccess={async () => {
                       toast.success('Payment processed successfully!');
+                      await refreshPaymentData();
                     }}
-                    onCancel={() => undefined}
                   />
                   <div className='text-muted-foreground text-sm'>
                     Or record a manual payment:
@@ -76,9 +101,8 @@ export default function InvoicePaymentsPage() {
               <PaymentForm
                 invoiceId={id}
                 maxAmount={balance}
-                onSuccess={() => {
-                  refetchEmailLogs();
-                  invoiceQuery.refetch();
+                onSuccess={async () => {
+                  await refreshPaymentData();
                 }}
               />
             </div>
@@ -86,29 +110,6 @@ export default function InvoicePaymentsPage() {
           <PaymentsList invoiceId={id} />
         </CardContent>
       </Card>
-
-      {/* Stripe Payment Dialog */}
-      <Dialog open={showStripePayment} onOpenChange={setShowStripePayment}>
-        <DialogContent className='max-w-2xl'>
-          <DialogHeader>
-            <DialogTitle>Pay Invoice #{invoice.invoiceNo}</DialogTitle>
-            <DialogDescription>
-              Pay the remaining balance of {formatCurrency(balance, currency)}
-            </DialogDescription>
-          </DialogHeader>
-          <StripePaymentForm
-            invoiceId={id}
-            amount={balance}
-            onSuccess={() => {
-              setShowStripePayment(false);
-              refetchEmailLogs();
-              invoiceQuery.refetch();
-              toast.success('Payment processed successfully!');
-            }}
-            onCancel={() => setShowStripePayment(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

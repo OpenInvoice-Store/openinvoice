@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { stripe, calculatePlatformFee } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { getInvoiceCurrency } from '@/lib/currency';
+import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
         customer: true,
         organization: true,
         items: true,
-        payments: true
+        payments: true,
+        invoiceTaxes: true // Include invoice taxes to check if tax was already calculated
       }
     });
 
@@ -133,14 +135,11 @@ export async function POST(request: NextRequest) {
     // Calculate amount in cents
     const amountInCents = Math.round(amountNum * 100);
 
-    // Validate amount doesn't exceed invoice total (with small tolerance for rounding)
-    const invoiceTotal = invoice.items.reduce(
-      (sum, item) =>
-        sum + item.price * item.quantity * (1 + item.taxRate / 100),
-      0
-    );
+    // IMPORTANT: Use calculateInvoiceTotals to get the correct total including all taxes
+    // This includes both legacy manual tax (item.taxRate) and custom tax (TaxJar/tax profiles)
+    const invoiceTotals = calculateInvoiceTotals(invoice as any);
     const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
-    const remainingBalance = invoiceTotal - totalPaid;
+    const remainingBalance = invoiceTotals.balance;
 
     // Allow small tolerance for rounding differences (1 cent)
     if (amountNum > remainingBalance + 0.01) {
@@ -229,20 +228,35 @@ export async function POST(request: NextRequest) {
       (invoice as any).stripeTaxEnabled || org.stripeTaxEnabled || false;
     const customerTaxExempt = (customer as any)?.taxExempt || false;
 
-    // Calculate final amount (including Stripe Tax if enabled)
+    // IMPORTANT: Check if invoice already has tax calculated (from TaxJar or tax profile)
+    // If tax is already included in the invoice, DO NOT add Stripe Tax (prevent double taxation)
+    // Note: invoiceTotals was already calculated above for validation
+    const invoiceHasTaxAlready = invoiceTotals.totalTax > 0;
+
+    // Calculate final amount
     let finalAmount = amountInCents;
 
-    // If Stripe Tax is enabled and customer is not exempt, calculate tax
-    // Note: For now, we'll use the tax amount already stored on the invoice if available
-    // In a full implementation, you'd call the Tax Calculation API here
+    // Only use Stripe Tax if:
+    // 1. Stripe Tax is enabled
+    // 2. Customer is not tax exempt
+    // 3. Invoice does NOT already have tax calculated (from TaxJar or tax profile)
+    // 4. Invoice has totalTaxAmount stored (from Stripe Tax calculation)
     if (
       stripeTaxEnabled &&
       !customerTaxExempt &&
+      !invoiceHasTaxAlready &&
       (invoice as any).totalTaxAmount
     ) {
       // Add the Stripe Tax amount to the payment amount
+      // This is safe because we verified the invoice has NO tax already
       const stripeTaxAmount = Math.round((invoice as any).totalTaxAmount * 100);
       finalAmount = amountInCents + stripeTaxAmount;
+    } else if (stripeTaxEnabled && !customerTaxExempt && invoiceHasTaxAlready) {
+      // Invoice already has tax - DO NOT add Stripe Tax to prevent double taxation
+      // The amount passed is already correct (includes tax from TaxJar or tax profile)
+      console.log(
+        `[Payment Intent] Skipping Stripe Tax - invoice already has tax calculated (${invoiceTotals.totalTax})`
+      );
     }
 
     // For Stripe Connect Express accounts, create payment intent on PLATFORM account
@@ -274,9 +288,14 @@ export async function POST(request: NextRequest) {
       // connected account.
       // Always enable automatic_payment_methods - Stripe will still use preferred
       // payment method if one is specified via the payment_method parameter
+      // This automatically includes Google Pay and Apple Pay when supported
       automatic_payment_methods: {
-        enabled: true
+        enabled: true,
+        // Allow redirect-based payment methods (required for some wallets)
+        allow_redirects: 'always'
       },
+      // Don't restrict payment_method_types - let automatic_payment_methods handle it
+      // This allows wallets (Google Pay, Apple Pay) to be available
       // Ask Stripe to save the payment method for future off-session use.
       // This enables "saved cards" in the Payment Element for this customer.
       setup_future_usage: 'off_session',

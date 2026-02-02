@@ -32,12 +32,20 @@ import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { FormDescription } from '@/components/ui/form';
+import { COUNTRIES } from '@/constants/countries';
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   phone: z.string().optional(),
-  address: z.string().optional(),
+  address: z.string().optional(), // Legacy free-form address
+  // Structured address fields for TaxJar
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
   taxExempt: z.boolean().optional(),
   taxExemptionReason: z.string().optional(),
   taxId: z.string().optional()
@@ -62,6 +70,12 @@ export function CustomerForm() {
       email: '',
       phone: '',
       address: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: 'US',
       taxExempt: false,
       taxExemptionReason: '',
       taxId: ''
@@ -75,6 +89,12 @@ export function CustomerForm() {
         email: customer.email || '',
         phone: customer.phone || '',
         address: customer.address || '',
+        addressLine1: (customer as any).addressLine1 || '',
+        addressLine2: (customer as any).addressLine2 || '',
+        city: (customer as any).city || '',
+        state: (customer as any).state || '',
+        postalCode: (customer as any).postalCode || '',
+        country: (customer as any).country || 'US',
         taxExempt: (customer as any).taxExempt || false,
         taxExemptionReason: (customer as any).taxExemptionReason || '',
         taxId: (customer as any).taxId || ''
@@ -153,19 +173,166 @@ export function CustomerForm() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name='address'
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Address</FormLabel>
-              <FormControl>
-                <Textarea {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Structured Address Fields for TaxJar */}
+        <div className='space-y-4 rounded-lg border p-4'>
+          <div className='space-y-2'>
+            <h3 className='text-sm font-semibold'>Address</h3>
+            <p className='text-muted-foreground text-xs'>
+              Structured address information for accurate tax calculations
+              (TaxJar)
+            </p>
+          </div>
+
+          <FormField
+            control={form.control}
+            name='addressLine1'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Street Address</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder='123 Main St' />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='addressLine2'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Address Line 2 (Optional)</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder='Apt, Suite, Unit, etc.' />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className='grid grid-cols-2 gap-4'>
+            <FormField
+              control={form.control}
+              name='city'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder='New York' />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='state'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {form.watch('country') === 'US' || !form.watch('country')
+                      ? 'State'
+                      : 'State/Province'}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder={
+                        form.watch('country') === 'US' || !form.watch('country')
+                          ? 'CA, NY, TX'
+                          : 'Ontario, BC'
+                      }
+                      maxLength={50}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className='grid grid-cols-2 gap-4'>
+            <FormField
+              control={form.control}
+              name='postalCode'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {form.watch('country') === 'US' || !form.watch('country')
+                      ? 'ZIP Code'
+                      : 'Postal Code'}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder={
+                        form.watch('country') === 'US' || !form.watch('country')
+                          ? '90210'
+                          : 'K1A 0B1'
+                      }
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='country'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country *</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || 'US'}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder='Select country' />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {COUNTRIES.map((country) => (
+                        <SelectItem key={country.code} value={country.code}>
+                          {country.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Required for accurate tax calculations with TaxJar
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Legacy Address Field (Optional) */}
+          <FormField
+            control={form.control}
+            name='address'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Full Address (Legacy - Optional)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder='Full address as text (for display purposes)'
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional: Full address as text. Structured fields above are
+                  preferred for tax calculations.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         {/* Tax Exemption Section */}
         <div className='space-y-4 rounded-lg border p-4'>
