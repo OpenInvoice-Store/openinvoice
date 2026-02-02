@@ -43,6 +43,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info, Loader2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
+import { Sparkles } from 'lucide-react';
 
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
@@ -78,6 +79,16 @@ export function InvoiceForm() {
   const { data: templates = [] } = useInvoiceTemplates();
   const { data: taxProfiles = [] } = useTaxProfiles();
 
+  // Check if AI is enabled
+  useEffect(() => {
+    fetch('/api/organizations/ai')
+      .then((res) => res.json())
+      .then((data) => {
+        setAiEnabled(data.aiEnabled === true);
+      })
+      .catch(() => setAiEnabled(false));
+  }, []);
+
   const createInvoice = useCreateInvoice();
   const updateInvoice = useUpdateInvoice();
 
@@ -97,6 +108,10 @@ export function InvoiceForm() {
     total: number;
   } | null>(null);
   const [isCalculatingTax, setIsCalculatingTax] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [generatingDescriptions, setGeneratingDescriptions] = useState<
+    Record<number, boolean>
+  >({});
 
   const defaultTemplate = templates.find((t) => t.isDefault);
 
@@ -545,15 +560,94 @@ export function InvoiceForm() {
               <FormField
                 control={form.control}
                 name={`items.${index}.description`}
-                render={({ field }) => (
-                  <FormItem className='col-span-3'>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const productId = form.watch(`items.${index}.productId`);
+                  const selectedProduct = products?.find(
+                    (p) => p.id === productId
+                  );
+                  const customerId = form.watch('customerId');
+                  const selectedCustomer = customers?.find(
+                    (c) => c.id === customerId
+                  );
+
+                  const handleGenerateDescription = async () => {
+                    if (!selectedProduct) {
+                      toast.error('Please select a product first');
+                      return;
+                    }
+
+                    setGeneratingDescriptions((prev) => ({
+                      ...prev,
+                      [index]: true
+                    }));
+
+                    try {
+                      const response = await fetch(
+                        '/api/ai/generate-description',
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            productName: selectedProduct.name,
+                            customerId: customerId || undefined,
+                            customerName: selectedCustomer?.name || undefined
+                          })
+                        }
+                      );
+
+                      if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(
+                          error.error || 'Failed to generate description'
+                        );
+                      }
+
+                      const data = await response.json();
+                      form.setValue(
+                        `items.${index}.description`,
+                        data.description
+                      );
+                      toast.success('Description generated successfully');
+                    } catch (error: any) {
+                      toast.error(
+                        error.message || 'Failed to generate description'
+                      );
+                    } finally {
+                      setGeneratingDescriptions((prev) => ({
+                        ...prev,
+                        [index]: false
+                      }));
+                    }
+                  };
+
+                  return (
+                    <FormItem className='col-span-3'>
+                      <FormLabel>Description</FormLabel>
+                      <div className='flex gap-2'>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        {aiEnabled && selectedProduct && (
+                          <Button
+                            type='button'
+                            variant='outline'
+                            size='icon'
+                            onClick={handleGenerateDescription}
+                            disabled={generatingDescriptions[index]}
+                            title='Generate description with AI'
+                          >
+                            {generatingDescriptions[index] ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : (
+                              <Sparkles className='h-4 w-4' />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField

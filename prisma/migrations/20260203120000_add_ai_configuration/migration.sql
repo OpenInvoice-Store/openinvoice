@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "aiProvider" TEXT,
+ADD COLUMN IF NOT EXISTS "openaiApiKey" TEXT,
+ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT,
+ADD COLUMN IF NOT EXISTS "aiEnabled" BOOLEAN NOT NULL DEFAULT false;
+
