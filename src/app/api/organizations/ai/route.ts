@@ -16,17 +16,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const organization = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: {
-        id: true,
-        aiProvider: true,
-        aiEnabled: true,
-        // Don't return API keys in GET request for security
-        openaiApiKey: false,
-        geminiApiKey: false
-      }
-    });
+    const organization = (await prisma.organization.findUnique({
+      where: { id: orgId }
+    })) as unknown as {
+      id: string;
+      aiProvider: string | null;
+      aiEnabled: boolean;
+      openaiApiKey: string | null;
+      geminiApiKey: string | null;
+    } | null;
 
     if (!organization) {
       return NextResponse.json(
@@ -35,9 +33,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Return settings without exposing actual API keys
     return NextResponse.json({
-      aiProvider: organization.aiProvider,
-      aiEnabled: organization.aiEnabled,
+      aiProvider: organization.aiProvider || null,
+      aiEnabled: organization.aiEnabled || false,
       hasOpenAIKey: !!organization.openaiApiKey,
       hasGeminiKey: !!organization.geminiApiKey
     });
@@ -104,17 +103,21 @@ export async function PUT(request: NextRequest) {
       updateData.geminiApiKey = geminiApiKey || null;
     if (aiEnabled !== undefined) updateData.aiEnabled = aiEnabled;
 
-    const updated = await prisma.organization.update({
+    const updated = (await prisma.organization.update({
       where: { id: orgId },
-      data: updateData,
-      select: {
-        id: true,
-        aiProvider: true,
-        aiEnabled: true
-      }
-    });
+      data: updateData
+    })) as unknown as {
+      id: string;
+      aiProvider: string | null;
+      aiEnabled: boolean;
+    };
 
-    return NextResponse.json(updated);
+    // Return only the fields we want
+    return NextResponse.json({
+      id: updated.id,
+      aiProvider: updated.aiProvider || null,
+      aiEnabled: updated.aiEnabled || false
+    });
   } catch (error) {
     console.error('Error updating AI settings:', error);
     return NextResponse.json(

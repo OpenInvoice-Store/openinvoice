@@ -52,6 +52,8 @@ model Product {
   taxRate        Float         @default(0)
   unit           String        @default("piece")
   imageUrl       String?
+  productType    String        @default("generic") // e.g., "shoe", "tshirt", "electronics", "generic"
+  variants       String?       // JSON string storing variant attributes (color, size, etc.)
   organizationId String
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime      @default(now())

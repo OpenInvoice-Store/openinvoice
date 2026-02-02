@@ -85,7 +85,7 @@ export function AISettings() {
     }
   });
 
-  const form = useForm<AISettingsFormData>({
+  const form = useForm({
     resolver: zodResolver(aiSettingsSchema),
     defaultValues: {
       aiProvider: null,
