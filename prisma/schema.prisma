@@ -263,6 +263,12 @@ model Organization {
   twilioAuthToken  String? // Twilio Auth Token (if not set, uses TWILIO_AUTH_TOKEN from env)
   twilioFromNumber String? // Twilio From Phone Number (if not set, uses TWILIO_FROM_NUMBER from env)
 
+  // AI Configuration
+  aiProvider String? // 'openai' | 'gemini' | null - which AI provider to use
+  openaiApiKey String? // OpenAI API key (encrypted/stored securely)
+  geminiApiKey String? // Google Gemini API key (encrypted/stored securely)
+  aiEnabled Boolean @default(false) // Whether AI features are enabled
+
   @@map("organizations")
 }
 

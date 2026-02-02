@@ -5,15 +5,54 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateProduct, useProduct, useUpdateProduct } from '../hooks/use-products';
+import {
+  useCreateProduct,
+  useProduct,
+  useUpdateProduct
+} from '../hooks/use-products';
 import { toast } from 'sonner';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { FileUploader } from '@/components/file-uploader';
 import Image from 'next/image';
+
+// Helper function to check if URL is from an allowed domain
+const isAllowedImageDomain = (url: string): boolean => {
+  try {
+    const urlObj = new URL(url);
+    const allowedHostnames = [
+      'api.slingacademy.com',
+      'img.clerk.com',
+      'clerk.com'
+    ];
+
+    // Check if hostname matches any allowed hostname or is a subdomain
+    const matchesAllowedHostname = allowedHostnames.some(
+      (hostname) =>
+        urlObj.hostname === hostname || urlObj.hostname.endsWith(`.${hostname}`)
+    );
+
+    // Check if it's a DigitalOcean Spaces domain
+    const isDigitalOceanSpaces = urlObj.hostname.endsWith(
+      '.digitaloceanspaces.com'
+    );
+
+    return matchesAllowedHostname || isDigitalOceanSpaces;
+  } catch {
+    // If URL parsing fails, assume it's not allowed
+    return false;
+  }
+};
 
 const productSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -21,7 +60,7 @@ const productSchema = z.object({
   price: z.number().min(0, 'Price must be positive'),
   taxRate: z.number().min(0).max(100),
   unit: z.string().min(1, 'Unit is required'),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().optional()
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -44,8 +83,8 @@ export function ProductForm() {
       price: 0,
       taxRate: 0,
       unit: 'piece',
-      imageUrl: '',
-    },
+      imageUrl: ''
+    }
   });
 
   const [uploading, setUploading] = useState(false);
@@ -58,7 +97,7 @@ export function ProductForm() {
         price: product.price,
         taxRate: product.taxRate,
         unit: product.unit,
-        imageUrl: product.imageUrl || '',
+        imageUrl: product.imageUrl || ''
       });
     }
   }, [product, isEditing, form]);
@@ -74,7 +113,7 @@ export function ProductForm() {
 
       const response = await fetch('/api/upload', {
         method: 'POST',
-        body: formData,
+        body: formData
       });
 
       if (!response.ok) {
@@ -97,7 +136,7 @@ export function ProductForm() {
       if (isEditing && id) {
         await updateProduct.mutateAsync({
           id,
-          ...data,
+          ...data
         });
         toast.success('Product updated successfully');
       } else {
@@ -115,7 +154,11 @@ export function ProductForm() {
   }
 
   return (
-    <Form form={form} onSubmit={form.handleSubmit(onSubmit)} className='space-y-4 max-w-2xl'>
+    <Form
+      form={form}
+      onSubmit={form.handleSubmit(onSubmit)}
+      className='max-w-2xl space-y-4'
+    >
       <FormField
         control={form.control}
         name='name'
@@ -156,7 +199,9 @@ export function ProductForm() {
                   type='number'
                   step='0.01'
                   {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  onChange={(e) =>
+                    field.onChange(parseFloat(e.target.value) || 0)
+                  }
                 />
               </FormControl>
               <FormMessage />
@@ -175,7 +220,9 @@ export function ProductForm() {
                   type='number'
                   step='0.01'
                   {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  onChange={(e) =>
+                    field.onChange(parseFloat(e.target.value) || 0)
+                  }
                 />
               </FormControl>
               <FormMessage />
@@ -207,13 +254,22 @@ export function ProductForm() {
             <FormControl>
               <div className='space-y-4'>
                 {field.value && (
-                  <div className='relative w-32 h-32 border rounded-lg overflow-hidden'>
-                    <Image
-                      src={field.value}
-                      alt='Product image'
-                      fill
-                      className='object-cover'
-                    />
+                  <div className='relative h-32 w-32 overflow-hidden rounded-lg border'>
+                    {isAllowedImageDomain(field.value) ? (
+                      <Image
+                        src={field.value}
+                        alt='Product image'
+                        fill
+                        className='object-cover'
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={field.value}
+                        alt='Product image'
+                        className='h-full w-full object-cover'
+                      />
+                    )}
                     <Button
                       type='button'
                       variant='destructive'
@@ -244,7 +300,10 @@ export function ProductForm() {
       />
 
       <div className='flex gap-2'>
-        <Button type='submit' disabled={createProduct.isPending || updateProduct.isPending}>
+        <Button
+          type='submit'
+          disabled={createProduct.isPending || updateProduct.isPending}
+        >
           {isEditing ? 'Update' : 'Create'} Product
         </Button>
         <Button
@@ -258,4 +317,3 @@ export function ProductForm() {
     </Form>
   );
 }
-

@@ -41,7 +41,7 @@ import { CURRENCIES } from '@/lib/currency';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info, Loader2 } from 'lucide-react';
+import { Info, Loader2, Sparkles } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -78,6 +78,16 @@ export function InvoiceForm() {
   const { data: branding } = useBrandingSettings();
   const { data: templates = [] } = useInvoiceTemplates();
   const { data: taxProfiles = [] } = useTaxProfiles();
+
+  // Check if AI is enabled
+  useEffect(() => {
+    fetch('/api/organizations/ai')
+      .then((res) => res.json())
+      .then((data) => {
+        setAiEnabled(data.aiEnabled === true);
+      })
+      .catch(() => setAiEnabled(false));
+  }, []);
 
   // Fetch TaxJar settings
   const { data: taxJarSettings } = useQuery({
@@ -118,6 +128,12 @@ export function InvoiceForm() {
     total: number;
   } | null>(null);
   const [isCalculatingTax, setIsCalculatingTax] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [generatingDescriptions, setGeneratingDescriptions] = useState<
+    Record<number, boolean>
+  >({});
+  const [highlightedDescriptionIndex, setHighlightedDescriptionIndex] =
+    useState<number | null>(null);
 
   const defaultTemplate = templates.find((t) => t.isDefault);
 
@@ -143,6 +159,16 @@ export function InvoiceForm() {
     control: form.control,
     name: 'items'
   });
+
+  // Check if AI is enabled for this organization
+  useEffect(() => {
+    fetch('/api/organizations/ai')
+      .then((res) => res.json())
+      .then((data) => {
+        setAiEnabled(data.aiEnabled === true);
+      })
+      .catch(() => setAiEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (invoice && isEditing) {
@@ -291,7 +317,7 @@ export function InvoiceForm() {
     } finally {
       setIsCalculatingTax(false);
     }
-  }, [selectedTaxProfileId, form, branding, taxJarSettings]);
+  }, [selectedTaxProfileId, form, branding, taxJarSettings, stripeTaxSettings]);
 
   // Watch form values for tax recalculation
   const watchedItems = useWatch({
@@ -637,15 +663,112 @@ export function InvoiceForm() {
               <FormField
                 control={form.control}
                 name={`items.${index}.description`}
-                render={({ field }) => (
-                  <FormItem className='col-span-3'>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const productId = form.watch(`items.${index}.productId`);
+                  const selectedProduct = products?.find(
+                    (p) => p.id === productId
+                  );
+                  const customerId = form.watch('customerId');
+                  const selectedCustomer = customers?.find(
+                    (c) => c.id === customerId
+                  );
+
+                  const handleGenerateDescription = async () => {
+                    if (!selectedProduct) {
+                      toast.error('Please select a product first');
+                      return;
+                    }
+
+                    setGeneratingDescriptions((prev) => ({
+                      ...prev,
+                      [index]: true
+                    }));
+
+                    try {
+                      const response = await fetch(
+                        '/api/ai/generate-description',
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            productName: selectedProduct.name,
+                            customerId: customerId || undefined,
+                            customerName: selectedCustomer?.name || undefined
+                          })
+                        }
+                      );
+
+                      if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(
+                          error.error || 'Failed to generate description'
+                        );
+                      }
+
+                      const data = await response.json();
+                      const generatedDescription = data.description;
+                      form.setValue(
+                        `items.${index}.description`,
+                        generatedDescription
+                      );
+
+                      // Highlight the field briefly
+                      setHighlightedDescriptionIndex(index);
+                      setTimeout(() => {
+                        setHighlightedDescriptionIndex(null);
+                      }, 2000);
+
+                      toast.success('Description generated', {
+                        description: `"${generatedDescription}"`,
+                        duration: 5000
+                      });
+                    } catch (error: any) {
+                      toast.error(
+                        error.message || 'Failed to generate description'
+                      );
+                    } finally {
+                      setGeneratingDescriptions((prev) => ({
+                        ...prev,
+                        [index]: false
+                      }));
+                    }
+                  };
+
+                  return (
+                    <FormItem className='col-span-3'>
+                      <FormLabel>Description</FormLabel>
+                      <div className='flex gap-2'>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            className={
+                              highlightedDescriptionIndex === index
+                                ? 'border-primary bg-primary/5 animate-pulse'
+                                : ''
+                            }
+                          />
+                        </FormControl>
+                        {aiEnabled && selectedProduct && (
+                          <Button
+                            type='button'
+                            variant='outline'
+                            size='icon'
+                            onClick={handleGenerateDescription}
+                            disabled={generatingDescriptions[index]}
+                            title='Generate description with AI'
+                          >
+                            {generatingDescriptions[index] ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : (
+                              <Sparkles className='h-4 w-4' />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField

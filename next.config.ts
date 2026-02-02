@@ -19,6 +19,11 @@ const baseConfig: NextConfig = {
         protocol: 'https',
         hostname: 'clerk.com',
         port: ''
+      },
+      {
+        protocol: 'https',
+        hostname: '*.digitaloceanspaces.com',
+        port: ''
       }
     ]
   },

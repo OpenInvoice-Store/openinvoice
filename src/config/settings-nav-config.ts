@@ -5,6 +5,7 @@ import {
   FileText,
   Mail,
   MessageSquare,
+  Sparkles,
   LucideIcon
 } from 'lucide-react';
 
@@ -40,5 +41,10 @@ export const settingsNavItems: SettingsNavItem[] = [
     title: 'Notifications',
     href: '/dashboard/settings/notifications',
     icon: Mail
+  },
+  {
+    title: 'AI Configuration',
+    href: '/dashboard/settings/ai',
+    icon: Sparkles
   }
 ];
