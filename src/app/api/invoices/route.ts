@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Prisma } from '@prisma/client';
 import { ensureUserAndOrganization } from '@/lib/clerk-sync';
 import { calculateTax, saveInvoiceTaxes } from '@/lib/tax-calculator';
+import { filterVisiblePayments } from '@/lib/payment-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +41,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     });
 
-    return NextResponse.json(invoices);
+    // Filter out pending crypto payments (amount = 0) from all invoices
+    const filteredInvoices = invoices.map((invoice) => ({
+      ...invoice,
+      payments: filterVisiblePayments(invoice.payments)
+    }));
+
+    return NextResponse.json(filteredInvoices);
   } catch (error) {
     console.error('Error fetching invoices:', error);
     return NextResponse.json(

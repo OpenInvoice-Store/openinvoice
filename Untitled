@@ -1,0 +1,3 @@
+ours before an address can be reused (default: 24)
+
+Add wallet addresses for each cryptocurrency you want to accept. The system will rotate through these addresses for each payment.

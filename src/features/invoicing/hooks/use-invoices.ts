@@ -30,6 +30,7 @@ export interface Invoice {
   taxProfileId?: string | null;
   organization?: {
     defaultCurrency: string;
+    cryptoPaymentsEnabled?: boolean;
   };
   createdAt: string;
   updatedAt: string;

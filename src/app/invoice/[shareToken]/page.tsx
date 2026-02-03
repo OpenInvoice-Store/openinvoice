@@ -46,7 +46,8 @@ export default async function PublicInvoicePage({
           companyPhone: true,
           companyEmail: true,
           companyWebsite: true,
-          footerText: true
+          footerText: true,
+          cryptoPaymentsEnabled: true
         }
       },
       invoiceTemplate: true,

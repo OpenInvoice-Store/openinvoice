@@ -147,7 +147,8 @@ model Payment {
   id        String   @id @default(cuid())
   invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   invoiceId String
-  amount    Float
+  amount    Float    // Actual amount received
+  expectedAmount Float? // Expected/requested amount (for tracking discrepancies)
   date      DateTime @default(now())
   method    String // cash, bank_transfer, credit_card, paypal, stripe, etc.
   notes     String?
@@ -169,6 +170,9 @@ model Payment {
   // Installment payment tracking
   installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
   installmentId String?
+
+  // Crypto payment relation
+  cryptoPayment CryptoPayment?
 
   @@index([invoiceId, stripeStatus])
   @@index([stripeStatus, nextRetryAt]) // For finding payments ready to retry
@@ -270,6 +274,21 @@ model Organization {
   openaiApiKey String? // OpenAI API key (encrypted/stored securely)
   geminiApiKey String? // Google Gemini API key (encrypted/stored securely)
   aiEnabled Boolean @default(false) // Whether AI features are enabled
+
+  // Crypto Payment Configuration
+  cryptoPaymentsEnabled Boolean @default(false) // Enable crypto payments
+  cryptoWallets String? // JSON object: {"btc": ["addr1", "addr2"], "eth": ["addr1"]}
+  cryptoMinConfirmations Int @default(3) // Minimum confirmations required
+  stopReusingAddresses Boolean @default(false) // Don't reuse addresses
+  addressReuseCooldownHours Int @default(24) // Hours before reusing address
+  
+  // Address generation settings (future)
+  btcAddressGenerationEnabled Boolean @default(false)
+  btcXpub String? // Bitcoin extended public key for HD wallet
+  ethAddressGenerationEnabled Boolean @default(false)
+  
+  cryptoPayments CryptoPayment[]
+  cryptoAddressUsage CryptoAddressUsage[]
 
   @@map("organizations")
 }
@@ -529,4 +548,58 @@ model InvoiceTax {
 
   @@index([invoiceId])
   @@map("invoice_taxes")
+}
+
+model CryptoPayment {
+  id                String   @id @default(cuid())
+  payment           Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId         String   @unique
+  
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId    String
+  
+  cryptocurrencyCode String   // 'btc', 'eth', 'usdt', 'sol', etc.
+  amount            String   // Crypto amount (string for precision)
+  address           String   // Address where payment should be sent
+  transactionHash   String?  // Blockchain transaction hash
+  confirmations     Int      @default(0)
+  minConfirmations  Int      @default(3)
+  status            String   @default("pending") // 'pending', 'confirmed', 'underpaid', 'expired'
+  expiresAt         DateTime  // Address expiration time
+  
+  // Exchange rate at time of creation
+  exchangeRate      Float?   // Fiat to crypto rate
+  fiatAmount        Float     // Actual fiat amount received (calculated from actual crypto amount)
+  expectedFiatAmount Float    // Expected/requested fiat amount (original invoice amount)
+  fiatCurrency      String    // Original fiat currency code
+  
+  // Link to wallet if using manual addresses
+  wallet            CryptoAddressUsage? @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  walletId          String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([status, createdAt])
+  @@index([address])
+  @@index([transactionHash])
+  @@index([organizationId, status])
+  @@index([expiresAt])
+  @@map("crypto_payments")
+}
+
+model CryptoAddressUsage {
+  id             String   @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  
+  cryptocurrency String   // 'btc', 'eth', 'usdt', etc.
+  address        String   // The wallet address
+  lastUsedAt     DateTime
+  
+  cryptoPayments CryptoPayment[]
+  
+  @@unique([organizationId, cryptocurrency, address])
+  @@index([organizationId, cryptocurrency, lastUsedAt])
+  @@map("crypto_address_usage")
 }

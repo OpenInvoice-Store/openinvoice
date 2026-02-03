@@ -146,3 +146,66 @@ export async function updateInvoiceStatusFromPaymentPlan(
     });
   }
 }
+
+/**
+ * Update invoice status for regular invoices (without payment plans)
+ */
+export async function updateRegularInvoiceStatus(
+  invoiceId: string
+): Promise<void> {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      items: true,
+      payments: true,
+      invoiceTaxes: true
+    }
+  });
+
+  if (!invoice) {
+    console.error('Invoice not found for status update:', invoiceId);
+    return;
+  }
+
+  // Calculate totals (including tax)
+  const subtotal = invoice.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const manualTax = invoice.items.reduce(
+    (sum, item) => sum + item.price * item.quantity * (item.taxRate / 100),
+    0
+  );
+  // Include custom tax from invoice taxes (tax profile)
+  const customTax =
+    (invoice as any).invoiceTaxes?.reduce(
+      (sum: number, tax: any) => sum + tax.amount,
+      0
+    ) || 0;
+  // Include Stripe Tax if it was used (legacy support)
+  const stripeTax = (invoice as any).totalTaxAmount || 0;
+  const totalAmount = subtotal + manualTax + customTax + stripeTax;
+
+  const totalPaid = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
+
+  // Update invoice status
+  let newStatus = invoice.status;
+
+  if (totalPaid >= totalAmount - 0.01) {
+    // Allow small tolerance for rounding (1 cent)
+    newStatus = 'paid';
+  } else if (invoice.status === 'draft' && totalPaid > 0) {
+    // If payment was made and invoice was draft, mark as sent
+    newStatus = 'sent';
+  }
+
+  if (newStatus !== invoice.status) {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: newStatus }
+    });
+    console.log(
+      `Updated invoice ${invoiceId} status from ${invoice.status} to ${newStatus}`
+    );
+  }
+}

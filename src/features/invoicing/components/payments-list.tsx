@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { formatDate, formatCurrency } from '@/lib/format';
 import { getInvoiceCurrency } from '@/lib/currency';
 import { useInvoice } from '../hooks/use-invoices';
+import { isCryptoPayment, isCryptoPaymentConfirmed } from '@/lib/payment-utils';
 import { useState } from 'react';
 
 export function PaymentsList({ invoiceId }: { invoiceId: string }) {
@@ -83,6 +84,10 @@ export function PaymentsList({ invoiceId }: { invoiceId: string }) {
               const retryCount = payment.retryCount || 0;
               const maxRetries = payment.maxRetries || 3;
 
+              // Check crypto payment status using shared utility functions
+              const isCrypto = isCryptoPayment(payment);
+              const isCryptoConfirmed = isCryptoPaymentConfirmed(payment);
+
               return (
                 <TableRow key={payment.id}>
                   <TableCell>{formatDate(payment.date)}</TableCell>
@@ -123,7 +128,17 @@ export function PaymentsList({ invoiceId }: { invoiceId: string }) {
                     {payment.stripeStatus === 'canceled' && (
                       <Badge variant='outline'>Canceled</Badge>
                     )}
-                    {!payment.stripeStatus && (
+                    {isCryptoConfirmed && (
+                      <Badge variant='default' className='bg-green-600'>
+                        Confirmed
+                      </Badge>
+                    )}
+                    {isCrypto && !isCryptoConfirmed && (
+                      <Badge variant='default' className='bg-yellow-600'>
+                        Pending
+                      </Badge>
+                    )}
+                    {!payment.stripeStatus && !isCrypto && (
                       <Badge variant='outline'>Manual</Badge>
                     )}
                   </TableCell>

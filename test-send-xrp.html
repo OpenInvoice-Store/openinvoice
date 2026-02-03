@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test XRP Payment</title>
+    <script src="https://unpkg.com/xrpl@4.0.0/build/xrpl-latest-min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #0066cc;
+            margin-top: 0;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .info {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #0066cc;
+        }
+        .info p {
+            margin: 5px 0;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .success {
+            background-color: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #555;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.connected {
+            background-color: #28a745;
+            color: white;
+        }
+        .status.disconnected {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test XRP Payment Sender</h1>
+        <p>Use this tool to send test XRP payments to your generated address from settings.</p>
+        <p>Connection Status: <span id="connectionStatus" class="status disconnected">Disconnected</span></p>
+    </div>
+
+    <div class="container">
+        <h3>Step 1: Get Sender Account</h3>
+        <label>Sender Seed (Secret Key):</label>
+        <input type="text" id="senderSeed" placeholder="Enter seed or leave empty to generate new account from faucet">
+        <button onclick="getSenderAccount()">Get Account Info / Generate New</button>
+        
+        <div id="senderInfo" class="info" style="display:none;">
+            <p><strong>Address:</strong> <span id="senderAddress"></span></p>
+            <p><strong>Balance:</strong> <span id="senderBalance"></span> XRP</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>Step 2: Send Payment</h3>
+        <label>Destination Address (Your generated address from settings):</label>
+        <input type="text" id="destinationAddress" placeholder="r... (paste your generated XRP address here)">
+        
+        <label>Amount (XRP):</label>
+        <input type="text" id="amount" placeholder="10" value="10">
+        
+        <button onclick="sendPayment()" id="sendButton">Send XRP</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <div class="container">
+        <h3>Instructions</h3>
+        <ol>
+            <li>Go to your app Settings → Crypto Payment Settings</li>
+            <li>Click "Generate Testnet Account" and copy the address</li>
+            <li>Paste that address in the "Destination Address" field above</li>
+            <li>Click "Get Account Info / Generate New" to get a sender account (or use an existing seed)</li>
+            <li>Enter the amount you want to send</li>
+            <li>Click "Send XRP"</li>
+            <li>Check your invoice payment form - the WebSocket should detect the transaction automatically!</li>
+        </ol>
+    </div>
+
+    <script>
+        const TESTNET_URL = 'wss://s.altnet.rippletest.net:51233'
+        let client = null
+        let isConnected = false
+
+        function updateConnectionStatus(connected) {
+            isConnected = connected
+            const statusEl = document.getElementById('connectionStatus')
+            statusEl.textContent = connected ? 'Connected' : 'Disconnected'
+            statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected')
+        }
+
+        async function connect() {
+            if (client && isConnected) {
+                return client
+            }
+            
+            try {
+                client = new xrpl.Client(TESTNET_URL)
+                await client.connect()
+                updateConnectionStatus(true)
+                console.log('Connected to XRPL Testnet')
+                return client
+            } catch (error) {
+                updateConnectionStatus(false)
+                throw new Error('Failed to connect: ' + error.message)
+            }
+        }
+
+        async function disconnect() {
+            if (client && isConnected) {
+                try {
+                    await client.disconnect()
+                    updateConnectionStatus(false)
+                    console.log('Disconnected from XRPL Testnet')
+                } catch (error) {
+                    console.error('Error disconnecting:', error)
+                }
+            }
+        }
+
+        async function getSenderAccount() {
+            const seedInput = document.getElementById('senderSeed').value.trim()
+            const infoDiv = document.getElementById('senderInfo')
+            const resultDiv = document.getElementById('result')
+            
+            resultDiv.innerHTML = ''
+            
+            try {
+                const client = await connect()
+                
+                if (!seedInput) {
+                    // Generate new account from faucet
+                    resultDiv.innerHTML = '<div class="info">Generating new account from faucet... This may take a moment.</div>'
+                    const {wallet, balance} = await client.fundWallet()
+                    
+                    document.getElementById('senderSeed').value = wallet.seed
+                    document.getElementById('senderAddress').textContent = wallet.address
+                    document.getElementById('senderBalance').textContent = balance
+                    infoDiv.style.display = 'block'
+                    
+                    resultDiv.innerHTML = '<div class="info success">✓ Account generated successfully! Seed has been filled in automatically.</div>'
+                } else {
+                    // Use existing seed
+                    const wallet = xrpl.Wallet.fromSeed(seedInput)
+                    const balance = await client.getXrpBalance(wallet.address)
+                    
+                    document.getElementById('senderAddress').textContent = wallet.address
+                    document.getElementById('senderBalance').textContent = balance
+                    infoDiv.style.display = 'block'
+                    
+                    resultDiv.innerHTML = '<div class="info success">✓ Account loaded successfully!</div>'
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="info error">Error: ' + error.message + '</div>'
+                console.error('Error:', error)
+            }
+        }
+        
+        async function sendPayment() {
+            const seed = document.getElementById('senderSeed').value.trim()
+            const destination = document.getElementById('destinationAddress').value.trim()
+            const amount = document.getElementById('amount').value.trim()
+            const resultDiv = document.getElementById('result')
+            const sendButton = document.getElementById('sendButton')
+            
+            if (!seed) {
+                resultDiv.innerHTML = '<div class="info error">Please get a sender account first (Step 1)</div>'
+                return
+            }
+            
+            if (!destination) {
+                resultDiv.innerHTML = '<div class="info error">Please enter a destination address</div>'
+                return
+            }
+            
+            if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+                resultDiv.innerHTML = '<div class="info error">Please enter a valid amount</div>'
+                return
+            }
+            
+            sendButton.disabled = true
+            sendButton.textContent = 'Sending...'
+            resultDiv.innerHTML = '<div class="info">Preparing transaction...</div>'
+            
+            try {
+                const client = await connect()
+                const wallet = xrpl.Wallet.fromSeed(seed)
+                
+                // Validate destination address
+                if (!xrpl.isValidAddress(destination)) {
+                    throw new Error('Invalid destination address')
+                }
+                
+                // Prepare transaction
+                resultDiv.innerHTML = '<div class="info">Preparing transaction...</div>'
+                const prepared = await client.autofill({
+                    "TransactionType": "Payment",
+                    "Account": wallet.address,
+                    "Amount": xrpl.xrpToDrops(amount),
+                    "Destination": destination
+                })
+                
+                // Sign transaction
+                resultDiv.innerHTML = '<div class="info">Signing transaction...</div>'
+                const signed = wallet.sign(prepared)
+                
+                // Submit and wait
+                resultDiv.innerHTML = '<div class="info">Submitting transaction...</div>'
+                const tx = await client.submitAndWait(signed.tx_blob)
+                
+                // Get balance changes
+                const balanceChanges = xrpl.getBalanceChanges(tx.result.meta)
+                
+                // Update sender balance
+                const newBalance = await client.getXrpBalance(wallet.address)
+                document.getElementById('senderBalance').textContent = newBalance
+                
+                // Show success result
+                resultDiv.innerHTML = `
+                    <div class="info success">
+                        <h4>✓ Transaction Successful!</h4>
+                        <p><strong>Transaction Hash:</strong> ${tx.result.hash}</p>
+                        <p><strong>Result:</strong> ${tx.result.meta.TransactionResult}</p>
+                        <p><strong>Ledger Index:</strong> ${tx.result.ledger_index}</p>
+                        <p><strong>Amount Sent:</strong> ${amount} XRP</p>
+                        <p><strong>New Balance:</strong> ${newBalance} XRP</p>
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; font-weight: bold;">Balance Changes</summary>
+                            <pre>${JSON.stringify(balanceChanges, null, 2)}</pre>
+                        </details>
+                        <p style="margin-top: 15px; font-weight: bold; color: #155724;">
+                            ✓ Check your invoice payment form - the WebSocket should detect this transaction automatically!
+                        </p>
+                    </div>
+                `
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="info error">
+                        <h4>✗ Transaction Failed</h4>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        ${error.data ? `<pre>${JSON.stringify(error.data, null, 2)}</pre>` : ''}
+                    </div>
+                `
+                console.error('Transaction error:', error)
+            } finally {
+                sendButton.disabled = false
+                sendButton.textContent = 'Send XRP'
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            disconnect()
+        })
+    </script>
+</body>
+</html>
+

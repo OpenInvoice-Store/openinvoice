@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { filterVisiblePayments } from '@/lib/payment-utils';
 
 /**
  * GET - Generate custom report based on parameters
@@ -169,7 +170,7 @@ export async function GET(request: NextRequest) {
           })
         };
 
-        const payments = await prisma.payment.findMany({
+        const allPayments = await prisma.payment.findMany({
           where,
           include: {
             invoice: {
@@ -180,6 +181,9 @@ export async function GET(request: NextRequest) {
           },
           orderBy: { date: 'desc' }
         });
+
+        // Filter out pending crypto payments (amount = 0) - these are payment requests, not actual payments
+        const payments = filterVisiblePayments(allPayments);
 
         results = payments.map((payment) => ({
           id: payment.id,

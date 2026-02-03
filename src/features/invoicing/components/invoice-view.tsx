@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentsList } from './payments-list';
 import { PaymentForm } from './payment-form';
 import { StripePaymentForm } from './stripe-payment-form';
+import { CryptoPaymentForm } from './crypto-payment-form';
 import { PaymentPlanSection } from './payment-plan-section';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -616,6 +617,26 @@ export function InvoiceView() {
                         }}
                       />
                     ) : null}
+                    {invoice?.organization?.cryptoPaymentsEnabled && (
+                      <div className='space-y-2'>
+                        {stripeStatus?.connected &&
+                          stripeStatus?.status === 'active' && (
+                            <div className='text-muted-foreground text-center text-sm'>
+                              Or
+                            </div>
+                          )}
+                        <div className='text-muted-foreground text-sm font-medium'>
+                          Pay with cryptocurrency:
+                        </div>
+                        <CryptoPaymentForm
+                          invoiceId={id}
+                          amount={balance}
+                          onSuccess={async () => {
+                            await refreshPaymentData();
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className='text-muted-foreground text-sm'>
                       Or record a manual payment:
                     </div>

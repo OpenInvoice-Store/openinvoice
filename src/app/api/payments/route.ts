@@ -6,6 +6,7 @@ import {
   applyPaymentToInstallments,
   updateInvoiceStatusFromPaymentPlan
 } from '@/lib/payment-plan';
+import { filterVisiblePayments } from '@/lib/payment-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     const invoiceId = searchParams.get('invoiceId');
     const customerId = searchParams.get('customerId');
 
-    const payments = await prisma.payment.findMany({
+    const allPayments = await prisma.payment.findMany({
       where: {
         ...(invoiceId && { invoiceId }),
         ...(customerId && {
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { date: 'desc' }
     });
+
+    // Filter out pending crypto payments (amount = 0) - these are payment requests, not actual payments
+    const payments = filterVisiblePayments(allPayments);
 
     return NextResponse.json(payments);
   } catch (error) {

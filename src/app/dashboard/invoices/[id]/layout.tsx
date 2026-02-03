@@ -160,6 +160,7 @@ export default function InvoiceDetailLayout({
   // Helper function to get badge count
   const getBadgeCount = (badgeKey?: string): number | null => {
     if (!badgeKey) return null;
+    // Payments are already filtered at the API level, so we can use the length directly
     if (badgeKey === 'payments.length') return invoice.payments.length;
     if (badgeKey === 'emailLogs.length') return emailLogs.length;
     if (badgeKey === 'smsLogs.length') return smsLogs.length;

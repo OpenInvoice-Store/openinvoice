@@ -45,6 +45,7 @@ import {
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TaxProfileSettings } from '@/features/invoicing/components/tax-profile-settings';
+import { CryptoPaymentSettings } from '@/features/invoicing/components/crypto-payment-settings';
 import { useStripeConnectStatus } from '@/features/invoicing/hooks/use-stripe';
 import { COUNTRIES } from '@/constants/countries';
 
@@ -509,6 +510,19 @@ export default function PaymentsSettingsPage() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Crypto Payment Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Crypto Payments</CardTitle>
+            <CardDescription>
+              Accept payments in Bitcoin, Ethereum, and other cryptocurrencies
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CryptoPaymentSettings />
           </CardContent>
         </Card>
 

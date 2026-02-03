@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { calculateTax, saveInvoiceTaxes } from '@/lib/tax-calculator';
+import { filterVisiblePayments } from '@/lib/payment-utils';
 
 export async function GET(
   request: NextRequest,
@@ -24,7 +25,8 @@ export async function GET(
         customer: true,
         organization: {
           select: {
-            defaultCurrency: true
+            defaultCurrency: true,
+            cryptoPaymentsEnabled: true
           }
         },
         items: {
@@ -57,7 +59,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    return NextResponse.json(invoice);
+    // Filter out pending crypto payments (amount = 0) - these are payment requests, not actual payments
+    const filteredInvoice = {
+      ...invoice,
+      payments: filterVisiblePayments(invoice.payments)
+    };
+
+    return NextResponse.json(filteredInvoice);
   } catch (error) {
     console.error('Error fetching invoice:', error);
     return NextResponse.json(

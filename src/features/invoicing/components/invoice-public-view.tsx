@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { calculateInvoiceTotals } from '@/lib/invoice-calculations';
 import { toast } from 'sonner';
+import { CryptoPaymentForm } from './crypto-payment-form';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',
@@ -681,6 +682,56 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Payment Section */}
+        {balance > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Make a Payment</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              {stripeStatus?.connected && stripeStatus?.status === 'active' && (
+                <div className='space-y-2'>
+                  <div className='text-muted-foreground text-sm font-medium'>
+                    Pay with credit card:
+                  </div>
+                  <Button
+                    onClick={handlePayNow}
+                    style={{ backgroundColor: primaryColor }}
+                    className='w-full hover:opacity-90'
+                  >
+                    <IconCurrencyDollar className='mr-2 h-4 w-4' />
+                    {paymentPlanInfo
+                      ? `Pay Installment #${paymentPlanInfo.installmentNumber} (${formatCurrencyAmount(paymentPlanInfo.amountDue, currency)})`
+                      : `Pay Now (${formatCurrencyAmount(balance, currency)})`}
+                  </Button>
+                </div>
+              )}
+              {(invoice?.organization as any)?.cryptoPaymentsEnabled && (
+                <div className='space-y-2'>
+                  {stripeStatus?.connected &&
+                    stripeStatus?.status === 'active' && (
+                      <div className='text-muted-foreground text-center text-sm'>
+                        Or
+                      </div>
+                    )}
+                  <div className='text-muted-foreground text-sm font-medium'>
+                    Pay with cryptocurrency:
+                  </div>
+                  <CryptoPaymentForm
+                    invoiceId={invoice.id}
+                    amount={paymentPlanInfo?.amountDue || balance}
+                    onSuccess={() => {
+                      toast.success('Payment received! Thank you.');
+                      // Reload page to show updated balance
+                      window.location.reload();
+                    }}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
