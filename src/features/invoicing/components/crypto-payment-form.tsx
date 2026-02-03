@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +28,6 @@ import {
   createXRPWebSocketMonitor,
   isWebSocketAvailable
 } from '@/lib/crypto/xrp-websocket';
-import { isTestnetEnabled } from '@/lib/crypto/blockchain-monitor';
 
 interface CryptoPaymentFormProps {
   invoiceId: string;
@@ -80,12 +79,198 @@ export function CryptoPaymentForm({
     null
   );
   const [copied, setCopied] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wsMonitorRef = useRef<ReturnType<
     typeof createXRPWebSocketMonitor
   > | null>(null);
   const wsSetupRef = useRef<string | null>(null); // Track which address we've set up WebSocket for
   const wsFailedRef = useRef<boolean>(false); // Track if WebSocket has failed (to prevent retries)
+
+  // Storage key for persisting payment data
+  const storageKey = `crypto-payment-${invoiceId}`;
+
+  const checkPaymentStatus = useCallback(
+    async (
+      currentPaymentData: CryptoPaymentData | null,
+      options?: {
+        actualCryptoAmount?: string;
+        transactionHash?: string;
+      }
+    ) => {
+      if (!currentPaymentData) return;
+
+      try {
+        // Use public endpoint for invoice-based checking (works for public view)
+        const response = await fetch(
+          `/api/invoices/${invoiceId}/crypto-payment/check`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              cryptoPaymentId: currentPaymentData.cryptoPaymentId,
+              ...(options?.actualCryptoAmount && {
+                actualCryptoAmount: options.actualCryptoAmount
+              }),
+              ...(options?.transactionHash && {
+                transactionHash: options.transactionHash
+              })
+            })
+          }
+        );
+
+        if (!response.ok) {
+          // Fallback to authenticated endpoint if public endpoint fails
+          try {
+            const fallbackResponse = await fetch('/api/payments/crypto/check', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                paymentId: currentPaymentData.cryptoPaymentId,
+                ...(options?.actualCryptoAmount && {
+                  actualCryptoAmount: options.actualCryptoAmount
+                }),
+                ...(options?.transactionHash && {
+                  transactionHash: options.transactionHash
+                })
+              })
+            });
+
+            if (fallbackResponse.ok) {
+              const status: PaymentStatus = await fallbackResponse.json();
+              setPaymentStatus(status);
+
+              if (status.confirmed) {
+                // Clean up polling
+                if (pollingIntervalRef.current) {
+                  clearInterval(pollingIntervalRef.current);
+                  pollingIntervalRef.current = null;
+                }
+                // Clean up WebSocket
+                if (wsMonitorRef.current) {
+                  wsMonitorRef.current.disconnect();
+                  wsMonitorRef.current = null;
+                }
+                localStorage.removeItem(storageKey);
+                toast.success('Payment confirmed!');
+                onSuccess?.();
+              }
+              return;
+            }
+          } catch (fallbackError) {
+            console.log('Fallback endpoint also failed:', fallbackError);
+          }
+          throw new Error('Failed to check payment status');
+        }
+
+        const status: PaymentStatus = await response.json();
+        setPaymentStatus(status);
+
+        if (status.confirmed) {
+          // Clean up polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          // Clean up WebSocket
+          if (wsMonitorRef.current) {
+            wsMonitorRef.current.disconnect();
+            wsMonitorRef.current = null;
+          }
+          localStorage.removeItem(storageKey);
+          toast.success('Payment confirmed!');
+          onSuccess?.();
+        }
+      } catch (error) {
+        console.log('Error checking payment status:', error);
+      }
+    },
+    [invoiceId, storageKey, onSuccess]
+  );
+
+  // Restore payment data from localStorage on mount
+  useEffect(() => {
+    const restorePaymentData = async () => {
+      try {
+        // Check localStorage for saved payment
+        const savedPaymentId = localStorage.getItem(storageKey);
+        if (savedPaymentId) {
+          // Try to fetch payment data from public API
+          try {
+            const response = await fetch(
+              `/api/invoices/${invoiceId}/crypto-payment?cryptoPaymentId=${savedPaymentId}`
+            );
+            if (response.ok) {
+              const data: CryptoPaymentData = await response.json();
+              setPaymentData(data);
+              // Check status immediately with the fetched data
+              await checkPaymentStatus(data);
+            } else {
+              // Payment might be expired or confirmed, clear storage
+              localStorage.removeItem(storageKey);
+            }
+          } catch (error) {
+            console.log('Error restoring payment data:', error);
+            // Try to get latest pending payment
+            try {
+              const response = await fetch(
+                `/api/invoices/${invoiceId}/crypto-payment`
+              );
+              if (response.ok) {
+                const data: CryptoPaymentData = await response.json();
+                setPaymentData(data);
+                localStorage.setItem(storageKey, data.cryptoPaymentId);
+                await checkPaymentStatus(data);
+              }
+            } catch (err) {
+              console.log('Error fetching latest payment:', err);
+            }
+          }
+        } else {
+          // Try to get latest pending payment for this invoice
+          try {
+            const response = await fetch(
+              `/api/invoices/${invoiceId}/crypto-payment`
+            );
+            if (response.ok) {
+              const data: CryptoPaymentData = await response.json();
+              setPaymentData(data);
+              localStorage.setItem(storageKey, data.cryptoPaymentId);
+              await checkPaymentStatus(data);
+            }
+          } catch (error) {
+            // No pending payment found, that's okay
+            console.log('No pending payment found');
+          }
+        }
+      } catch (error) {
+        console.log('Error restoring payment:', error);
+      } finally {
+        setIsRestoring(false);
+      }
+    };
+
+    restorePaymentData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId]);
+
+  // Save payment data to localStorage when it changes
+  useEffect(() => {
+    if (paymentData?.cryptoPaymentId) {
+      localStorage.setItem(storageKey, paymentData.cryptoPaymentId);
+    }
+  }, [paymentData, storageKey]);
+
+  // Clear localStorage when payment is confirmed
+  useEffect(() => {
+    if (paymentStatus?.confirmed) {
+      localStorage.removeItem(storageKey);
+    }
+  }, [paymentStatus, storageKey]);
 
   // Generate QR code when payment data is available
   useEffect(() => {
@@ -134,7 +319,7 @@ export function CryptoPaymentForm({
         // Start polling if not already started
         if (!pollingIntervalRef.current) {
           pollingIntervalRef.current = setInterval(async () => {
-            await checkPaymentStatus();
+            await checkPaymentStatus(paymentData);
           }, 5000);
         }
         return;
@@ -166,9 +351,10 @@ export function CryptoPaymentForm({
       wsSetupRef.current = addressKey;
 
       // Create WebSocket monitor
+      // Use paymentData.testnet which comes from the server and reflects the actual environment
       const monitor = createXRPWebSocketMonitor({
         address: paymentData.address,
-        isTestnet: isTestnetEnabled(),
+        isTestnet: paymentData.testnet || false,
         onTransaction: async (tx) => {
           console.log('[XRP WebSocket] Transaction detected:', tx);
 
@@ -177,7 +363,7 @@ export function CryptoPaymentForm({
 
           // Check payment status via API, passing the ACTUAL transaction data
           // The API will update the payment with the actual amount received
-          await checkPaymentStatus({
+          await checkPaymentStatus(paymentData, {
             actualCryptoAmount: receivedAmount.toString(),
             transactionHash: tx.hash
           });
@@ -203,7 +389,7 @@ export function CryptoPaymentForm({
           if (!pollingIntervalRef.current) {
             console.log('[XRP] Using polling instead of WebSocket');
             pollingIntervalRef.current = setInterval(async () => {
-              await checkPaymentStatus();
+              await checkPaymentStatus(paymentData);
             }, 5000);
           }
         }
@@ -218,7 +404,7 @@ export function CryptoPaymentForm({
       });
 
       // Also do an initial check
-      checkPaymentStatus();
+      checkPaymentStatus(paymentData);
 
       return () => {
         if (wsMonitorRef.current) {
@@ -236,7 +422,7 @@ export function CryptoPaymentForm({
     } else {
       // Use polling for other cryptocurrencies or if WebSocket unavailable
       pollingIntervalRef.current = setInterval(async () => {
-        await checkPaymentStatus();
+        await checkPaymentStatus(paymentData);
       }, 5000);
 
       return () => {
@@ -247,56 +433,7 @@ export function CryptoPaymentForm({
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentData]); // Removed paymentStatus from dependencies to prevent infinite loops
-
-  const checkPaymentStatus = async (options?: {
-    actualCryptoAmount?: string;
-    transactionHash?: string;
-  }) => {
-    if (!paymentData) return;
-
-    try {
-      const response = await fetch('/api/payments/crypto/check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          paymentId: paymentData.cryptoPaymentId,
-          ...(options?.actualCryptoAmount && {
-            actualCryptoAmount: options.actualCryptoAmount
-          }),
-          ...(options?.transactionHash && {
-            transactionHash: options.transactionHash
-          })
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to check payment status');
-      }
-
-      const status: PaymentStatus = await response.json();
-      setPaymentStatus(status);
-
-      if (status.confirmed) {
-        // Clean up polling
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        // Clean up WebSocket
-        if (wsMonitorRef.current) {
-          wsMonitorRef.current.disconnect();
-          wsMonitorRef.current = null;
-        }
-        toast.success('Payment confirmed!');
-        onSuccess?.();
-      }
-    } catch (error) {
-      console.log('Error checking payment status:', error);
-    }
-  };
+  }, [paymentData, checkPaymentStatus]);
 
   const handleCreatePayment = async () => {
     if (!selectedCrypto) {
@@ -326,9 +463,11 @@ export function CryptoPaymentForm({
 
       const data: CryptoPaymentData = await response.json();
       setPaymentData(data);
+      // Save to localStorage
+      localStorage.setItem(storageKey, data.cryptoPaymentId);
 
-      // Check status immediately
-      await checkPaymentStatus();
+      // Check status immediately with the new data
+      await checkPaymentStatus(data);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create payment');
       setIsCreating(false);
@@ -365,6 +504,22 @@ export function CryptoPaymentForm({
         return `https://blockchair.com/${crypto}/transaction/${hash}`;
     }
   };
+
+  // Show loading state while restoring
+  if (isRestoring) {
+    return (
+      <Card className='w-full'>
+        <CardContent className='pt-6'>
+          <div className='flex items-center justify-center py-4'>
+            <Loader2 className='h-6 w-6 animate-spin' />
+            <span className='text-muted-foreground ml-2 text-sm'>
+              Loading payment information...
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (paymentData) {
     return (

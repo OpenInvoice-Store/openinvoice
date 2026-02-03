@@ -726,8 +726,11 @@ export function InvoicePublicView({ invoice }: InvoicePublicViewProps) {
                     amount={paymentPlanInfo?.amountDue || balance}
                     onSuccess={() => {
                       toast.success('Payment received! Thank you.');
-                      // Reload page to show updated balance
-                      window.location.reload();
+                      // Delay reload to allow user to see success message
+                      // The payment UI will persist after reload due to localStorage
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 2000);
                     }}
                   />
                 </div>
