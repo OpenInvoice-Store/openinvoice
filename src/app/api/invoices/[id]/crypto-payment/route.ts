@@ -70,7 +70,14 @@ export async function GET(
       }
 
       // Generate QR code data
-      const qrCodeData = `${cryptoPayment.cryptocurrencyCode}:${cryptoPayment.address}?amount=${cryptoPayment.amount}`;
+      // For XRP, include destination tag in QR code
+      const isXRP = cryptoPayment.cryptocurrencyCode.toLowerCase() === 'xrp';
+      let qrCodeData = `${cryptoPayment.cryptocurrencyCode}:${cryptoPayment.address}`;
+      if (isXRP && cryptoPayment.destinationTag !== null) {
+        qrCodeData += `?dt=${cryptoPayment.destinationTag}&amount=${cryptoPayment.amount}`;
+      } else {
+        qrCodeData += `?amount=${cryptoPayment.amount}`;
+      }
 
       return NextResponse.json({
         paymentId: cryptoPayment.paymentId,
@@ -78,6 +85,7 @@ export async function GET(
         cryptocurrency: cryptoPayment.cryptocurrencyCode.toUpperCase(),
         cryptoAmount: cryptoPayment.amount.toString(),
         address: cryptoPayment.address,
+        destinationTag: cryptoPayment.destinationTag, // Include destination tag
         qrCode: qrCodeData,
         expiresAt: cryptoPayment.expiresAt.toISOString(),
         minConfirmations: cryptoPayment.minConfirmations,
@@ -120,7 +128,14 @@ export async function GET(
     }
 
     // Generate QR code data
-    const qrCodeData = `${cryptoPayment.cryptocurrencyCode}:${cryptoPayment.address}?amount=${cryptoPayment.amount}`;
+    // For XRP, include destination tag in QR code
+    const isXRP = cryptoPayment.cryptocurrencyCode.toLowerCase() === 'xrp';
+    let qrCodeData = `${cryptoPayment.cryptocurrencyCode}:${cryptoPayment.address}`;
+    if (isXRP && cryptoPayment.destinationTag !== null) {
+      qrCodeData += `?dt=${cryptoPayment.destinationTag}&amount=${cryptoPayment.amount}`;
+    } else {
+      qrCodeData += `?amount=${cryptoPayment.amount}`;
+    }
 
     return NextResponse.json({
       paymentId: cryptoPayment.paymentId,
@@ -128,6 +143,7 @@ export async function GET(
       cryptocurrency: cryptoPayment.cryptocurrencyCode.toUpperCase(),
       cryptoAmount: cryptoPayment.amount.toString(),
       address: cryptoPayment.address,
+      destinationTag: cryptoPayment.destinationTag, // Include destination tag
       qrCode: qrCodeData,
       expiresAt: cryptoPayment.expiresAt.toISOString(),
       minConfirmations: cryptoPayment.minConfirmations,

@@ -561,6 +561,7 @@ model CryptoPayment {
   cryptocurrencyCode String   // 'btc', 'eth', 'usdt', 'sol', etc.
   amount            String   // Crypto amount (string for precision)
   address           String   // Address where payment should be sent
+  destinationTag    Int?     // XRP destination tag for payment identification (unique per payment)
   transactionHash   String?  // Blockchain transaction hash
   confirmations     Int      @default(0)
   minConfirmations  Int      @default(3)
@@ -582,6 +583,7 @@ model CryptoPayment {
   
   @@index([status, createdAt])
   @@index([address])
+  @@index([address, destinationTag]) // For XRP payment matching
   @@index([transactionHash])
   @@index([organizationId, status])
   @@index([expiresAt])

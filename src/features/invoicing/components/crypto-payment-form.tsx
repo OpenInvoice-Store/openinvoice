@@ -43,6 +43,7 @@ interface CryptoPaymentData {
   cryptocurrency: string;
   cryptoAmount: string;
   address: string;
+  destinationTag?: number | null; // XRP destination tag for payment identification
   qrCode: string;
   expiresAt: string;
   minConfirmations: number;
@@ -96,11 +97,30 @@ export function CryptoPaymentForm({
       options?: {
         actualCryptoAmount?: string;
         transactionHash?: string;
+        destinationTag?: number;
       }
     ) => {
       if (!currentPaymentData) return;
 
       try {
+        const requestBody = {
+          cryptoPaymentId: currentPaymentData.cryptoPaymentId,
+          ...(options?.actualCryptoAmount && {
+            actualCryptoAmount: options.actualCryptoAmount
+          }),
+          ...(options?.transactionHash && {
+            transactionHash: options.transactionHash
+          }),
+          ...(options?.destinationTag !== undefined && {
+            destinationTag: options.destinationTag
+          })
+        };
+
+        console.log('[CryptoPaymentForm] Calling check endpoint:', {
+          url: `/api/invoices/${invoiceId}/crypto-payment/check`,
+          body: requestBody
+        });
+
         // Use public endpoint for invoice-based checking (works for public view)
         const response = await fetch(
           `/api/invoices/${invoiceId}/crypto-payment/check`,
@@ -109,17 +129,22 @@ export function CryptoPaymentForm({
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              cryptoPaymentId: currentPaymentData.cryptoPaymentId,
-              ...(options?.actualCryptoAmount && {
-                actualCryptoAmount: options.actualCryptoAmount
-              }),
-              ...(options?.transactionHash && {
-                transactionHash: options.transactionHash
-              })
-            })
+            body: JSON.stringify(requestBody)
           }
         );
+
+        console.log(
+          '[CryptoPaymentForm] Check endpoint response status:',
+          response.status
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[CryptoPaymentForm] Check endpoint error:', {
+            status: response.status,
+            error: errorText
+          });
+        }
 
         if (!response.ok) {
           // Fallback to authenticated endpoint if public endpoint fails
@@ -361,12 +386,29 @@ export function CryptoPaymentForm({
           // Always use the ACTUAL amount received from WebSocket
           const receivedAmount = parseFloat(tx.amount);
 
+          console.log('[XRP WebSocket] Calling checkPaymentStatus with:', {
+            cryptoPaymentId: paymentData.cryptoPaymentId,
+            actualCryptoAmount: receivedAmount.toString(),
+            transactionHash: tx.hash,
+            destinationTag: tx.destinationTag,
+            invoiceId
+          });
+
           // Check payment status via API, passing the ACTUAL transaction data
           // The API will update the payment with the actual amount received
-          await checkPaymentStatus(paymentData, {
-            actualCryptoAmount: receivedAmount.toString(),
-            transactionHash: tx.hash
-          });
+          try {
+            await checkPaymentStatus(paymentData, {
+              actualCryptoAmount: receivedAmount.toString(),
+              transactionHash: tx.hash,
+              destinationTag: tx.destinationTag
+            });
+            console.log('[XRP WebSocket] checkPaymentStatus completed');
+          } catch (error) {
+            console.error(
+              '[XRP WebSocket] Error in checkPaymentStatus:',
+              error
+            );
+          }
         },
         onError: (error) => {
           console.warn(
@@ -594,6 +636,43 @@ export function CryptoPaymentForm({
                   )}
                 </Button>
               </div>
+              {paymentData.destinationTag !== null &&
+                paymentData.destinationTag !== undefined && (
+                  <div className='space-y-1'>
+                    <label className='text-muted-foreground text-sm font-medium'>
+                      Destination Tag (Required for XRP)
+                    </label>
+                    <div className='flex items-center gap-2'>
+                      <code className='bg-muted flex-1 rounded p-2 font-mono text-xs'>
+                        {paymentData.destinationTag}
+                      </code>
+                      <Button
+                        variant='outline'
+                        size='icon'
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              paymentData.destinationTag!.toString()
+                            );
+                            toast.success(
+                              'Destination tag copied to clipboard'
+                            );
+                          } catch (err) {
+                            toast.error('Failed to copy destination tag');
+                          }
+                        }}
+                        className='shrink-0'
+                      >
+                        <Copy className='h-4 w-4' />
+                      </Button>
+                    </div>
+                    <p className='text-muted-foreground text-xs'>
+                      ⚠️ Important: Include this destination tag when sending
+                      XRP payment, otherwise payment may not be matched
+                      correctly.
+                    </p>
+                  </div>
+                )}
             </div>
 
             {paymentStatus && (
@@ -606,7 +685,9 @@ export function CryptoPaymentForm({
                         ? 'text-green-600'
                         : paymentStatus.status === 'expired'
                           ? 'text-red-600'
-                          : 'text-yellow-600'
+                          : paymentStatus.status === 'underpaid'
+                            ? 'text-orange-600'
+                            : 'text-yellow-600'
                     }`}
                   >
                     {paymentStatus.status === 'confirmed'
@@ -618,6 +699,15 @@ export function CryptoPaymentForm({
                           : 'Pending'}
                   </span>
                 </div>
+
+                {paymentStatus.status === 'underpaid' && (
+                  <Alert className='border-orange-500 bg-orange-50 dark:bg-orange-950'>
+                    <AlertDescription className='text-sm text-orange-800 dark:text-orange-200'>
+                      ⚠️ Payment received but amount is less than expected.
+                      Please contact support or send the remaining amount.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {!paymentStatus.confirmed &&
                   paymentStatus.status !== 'expired' && (

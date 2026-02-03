@@ -130,6 +130,12 @@
         <label>Destination Address (Your generated address from settings):</label>
         <input type="text" id="destinationAddress" placeholder="r... (paste your generated XRP address here)">
         
+        <label>Destination Tag (Required - Get this from the invoice payment form):</label>
+        <input type="text" id="destinationTag" placeholder="12345678 (required for payment matching)">
+        <small style="color: #666; display: block; margin-top: 5px;">
+            ⚠️ The destination tag is displayed in the invoice payment form. You MUST include it for the payment to be matched correctly!
+        </small>
+        
         <label>Amount (XRP):</label>
         <input type="text" id="amount" placeholder="10" value="10">
         
@@ -143,7 +149,10 @@
         <ol>
             <li>Go to your app Settings → Crypto Payment Settings</li>
             <li>Click "Generate Testnet Account" and copy the address</li>
-            <li>Paste that address in the "Destination Address" field above</li>
+            <li>Create a crypto payment for an invoice (or view existing payment)</li>
+            <li>Copy the <strong>Destination Tag</strong> from the invoice payment form</li>
+            <li>Paste the address in the "Destination Address" field above</li>
+            <li>Paste the destination tag in the "Destination Tag" field above</li>
             <li>Click "Get Account Info / Generate New" to get a sender account (or use an existing seed)</li>
             <li>Enter the amount you want to send</li>
             <li>Click "Send XRP"</li>
@@ -233,6 +242,7 @@
         async function sendPayment() {
             const seed = document.getElementById('senderSeed').value.trim()
             const destination = document.getElementById('destinationAddress').value.trim()
+            const destinationTagInput = document.getElementById('destinationTag').value.trim()
             const amount = document.getElementById('amount').value.trim()
             const resultDiv = document.getElementById('result')
             const sendButton = document.getElementById('sendButton')
@@ -244,6 +254,17 @@
             
             if (!destination) {
                 resultDiv.innerHTML = '<div class="info error">Please enter a destination address</div>'
+                return
+            }
+            
+            if (!destinationTagInput) {
+                resultDiv.innerHTML = '<div class="info error">⚠️ Destination Tag is REQUIRED! Please enter the destination tag from the invoice payment form.</div>'
+                return
+            }
+            
+            const destinationTag = parseInt(destinationTagInput)
+            if (isNaN(destinationTag) || destinationTag < 0 || destinationTag > 4294967295) {
+                resultDiv.innerHTML = '<div class="info error">Invalid destination tag. Must be a number between 0 and 4294967295</div>'
                 return
             }
             
@@ -271,7 +292,8 @@
                     "TransactionType": "Payment",
                     "Account": wallet.address,
                     "Amount": xrpl.xrpToDrops(amount),
-                    "Destination": destination
+                    "Destination": destination,
+                    "DestinationTag": destinationTag  // Include destination tag for payment matching
                 })
                 
                 // Sign transaction
@@ -296,6 +318,7 @@
                         <p><strong>Transaction Hash:</strong> ${tx.result.hash}</p>
                         <p><strong>Result:</strong> ${tx.result.meta.TransactionResult}</p>
                         <p><strong>Ledger Index:</strong> ${tx.result.ledger_index}</p>
+                        <p><strong>Destination Tag:</strong> ${destinationTag}</p>
                         <p><strong>Amount Sent:</strong> ${amount} XRP</p>
                         <p><strong>New Balance:</strong> ${newBalance} XRP</p>
                         <details style="margin-top: 10px;">
@@ -303,7 +326,7 @@
                             <pre>${JSON.stringify(balanceChanges, null, 2)}</pre>
                         </details>
                         <p style="margin-top: 15px; font-weight: bold; color: #155724;">
-                            ✓ Check your invoice payment form - the WebSocket should detect this transaction automatically!
+                            ✓ Check your invoice payment form - the WebSocket should detect this transaction automatically using destination tag ${destinationTag}!
                         </p>
                     </div>
                 `

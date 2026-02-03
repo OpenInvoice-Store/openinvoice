@@ -103,6 +103,14 @@ export async function POST(request: NextRequest) {
     // Get crypto address
     const address = await getCryptoAddress(orgId, cryptocurrency);
 
+    // Generate destination tag for XRP (unique identifier for this payment)
+    // XRP destination tags are 32-bit unsigned integers (0 to 4294967295)
+    // This allows multiple invoices to use the same address
+    const isXRP = cryptocurrency.toLowerCase() === 'xrp';
+    const destinationTag = isXRP
+      ? Math.floor(Math.random() * 2147483647) // Max safe XRP destination tag
+      : null;
+
     // Set expiration (24 hours from now)
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
@@ -132,6 +140,7 @@ export async function POST(request: NextRequest) {
         cryptocurrencyCode: cryptocurrency.toLowerCase(),
         amount: cryptoAmount, // Expected crypto amount
         address,
+        destinationTag, // XRP destination tag for payment identification
         minConfirmations,
         status: 'pending',
         expiresAt,
@@ -150,7 +159,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate QR code data
-    const qrCodeData = `${cryptocurrency.toLowerCase()}:${address}?amount=${cryptoAmount}`;
+    // For XRP, include destination tag in QR code
+    let qrCodeData = `${cryptocurrency.toLowerCase()}:${address}`;
+    if (isXRP && destinationTag !== null) {
+      qrCodeData += `?dt=${destinationTag}&amount=${cryptoAmount}`;
+    } else {
+      qrCodeData += `?amount=${cryptoAmount}`;
+    }
 
     return NextResponse.json({
       paymentId: payment.id,
@@ -158,6 +173,7 @@ export async function POST(request: NextRequest) {
       cryptocurrency: cryptocurrency.toUpperCase(),
       cryptoAmount,
       address,
+      destinationTag, // Include in response for display
       qrCode: qrCodeData,
       expiresAt: expiresAt.toISOString(),
       minConfirmations,

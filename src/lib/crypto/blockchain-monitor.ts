@@ -24,6 +24,7 @@ interface BlockchainTransaction {
   blockHeight?: number;
   timestamp?: number;
   from?: string;
+  destinationTag?: number; // XRP destination tag for payment identification
 }
 
 interface BlockchainExplorerResponse {
@@ -384,7 +385,8 @@ async function getXRPTransactions(
                 confirmations: ledgerIndex ? 1 : 0, // XRP confirms in 3-5 seconds
                 blockHeight: ledgerIndex,
                 timestamp: txTime,
-                from: tx.Account
+                from: tx.Account,
+                destinationTag: tx.DestinationTag || undefined // XRP destination tag
               });
             }
           }
@@ -662,7 +664,8 @@ export async function getTransactionDetails(
             confirmations: tx.ledger_index ? 1 : 0,
             blockHeight: tx.ledger_index,
             timestamp: timestamp,
-            from: tx.tx_json?.Account
+            from: tx.tx_json?.Account,
+            destinationTag: tx.tx_json?.DestinationTag || undefined // XRP destination tag
           };
         }
       }

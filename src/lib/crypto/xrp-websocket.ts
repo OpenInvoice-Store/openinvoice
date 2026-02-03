@@ -20,6 +20,7 @@ interface XRPTransaction {
   amount: string; // XRP amount
   from: string;
   to: string;
+  destinationTag?: number; // XRP destination tag for payment identification
   ledgerIndex?: number;
   timestamp?: number;
   validated: boolean;
@@ -344,12 +345,18 @@ class XRPWebSocketMonitor {
       const account = transaction?.Account || tx.Account;
       const txAmount = transaction?.Amount || tx.Amount;
 
+      // Extract destination tag (XRP payment identifier)
+      // DestinationTag can be in transaction object or at top level
+      const destinationTag =
+        transaction?.DestinationTag || tx.DestinationTag || null;
+
       console.log(
         '[XRP WebSocket] Payment transaction to our address detected!',
         {
           hash: txHash,
           from: account,
           to: destination,
+          destinationTag, // Include destination tag in logs
           amount: txAmount,
           delivered_amount: meta?.delivered_amount,
           validated,
@@ -405,6 +412,10 @@ class XRPWebSocketMonitor {
         amount: amount.toString(),
         from: account,
         to: destination,
+        destinationTag:
+          destinationTag !== null && destinationTag !== undefined
+            ? destinationTag
+            : undefined,
         ledgerIndex:
           ledgerIndex || transaction?.ledger_index || tx.ledger_index,
         timestamp:
@@ -420,7 +431,8 @@ class XRPWebSocketMonitor {
         hash: xrpTransaction.hash,
         amount: xrpTransaction.amount,
         from: xrpTransaction.from,
-        to: xrpTransaction.to
+        to: xrpTransaction.to,
+        destinationTag: xrpTransaction.destinationTag
       });
       this.config.onTransaction(xrpTransaction);
     }
