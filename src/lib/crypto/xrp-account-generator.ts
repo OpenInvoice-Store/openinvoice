@@ -48,7 +48,7 @@ export async function createXRPAccount(
 
     // Create and fund a test account wallet (as shown in tutorial)
     // fundWallet() creates a new wallet and funds it from the testnet faucet
-    const faucetHost = null; // Use default faucet
+    const faucetHost = undefined; // Use default faucet
     const fundResult = await client.fundWallet(null, { faucetHost });
     const wallet = fundResult.wallet;
 
