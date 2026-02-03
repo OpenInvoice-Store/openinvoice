@@ -28,6 +28,7 @@ import { getInvoiceCurrency } from '@/lib/currency';
 import { useInvoice } from '../hooks/use-invoices';
 import { isCryptoPayment, isCryptoPaymentConfirmed } from '@/lib/payment-utils';
 import { useState } from 'react';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 export function PaymentsList({ invoiceId }: { invoiceId: string }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -143,12 +144,17 @@ export function PaymentsList({ invoiceId }: { invoiceId: string }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    {payment.notes || '-'}
-                    {isFailed && payment.nextRetryAt && (
-                      <div className='text-muted-foreground mt-1 text-xs'>
-                        Next retry: {formatDate(payment.nextRetryAt)}
-                      </div>
-                    )}
+                    <div className='max-w-xs'>
+                      <TruncatedText
+                        text={payment.notes || '-'}
+                        maxLength={50}
+                      />
+                      {isFailed && payment.nextRetryAt && (
+                        <div className='text-muted-foreground mt-1 text-xs'>
+                          Next retry: {formatDate(payment.nextRetryAt)}
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className='text-right'>
                     <Button
