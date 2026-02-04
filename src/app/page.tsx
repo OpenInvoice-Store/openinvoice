@@ -54,6 +54,15 @@ export default async function Page() {
                 <Github className='h-4 w-4' />
                 GitHub
               </a>
+              <a
+                href='https://doc.openinvoice.store'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors'
+              >
+                <FileText className='h-4 w-4' />
+                Docs
+              </a>
               <Link
                 href='/terms'
                 className='text-muted-foreground hover:text-foreground text-sm transition-colors'
@@ -387,6 +396,14 @@ export default async function Page() {
                 className='hover:text-foreground transition-colors'
               >
                 GitHub
+              </a>
+              <a
+                href='https://doc.openinvoice.store'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='hover:text-foreground transition-colors'
+              >
+                Docs
               </a>
             </div>
           </div>
