@@ -787,6 +787,32 @@ export function CryptoPaymentForm({
                 )}
             </div>
 
+            {(paymentData.testMode || paymentData.testnet) &&
+              paymentData.cryptocurrency.toLowerCase() === 'xrp' && (
+                <Alert className='border-blue-500 bg-blue-50 dark:bg-blue-950'>
+                  <AlertDescription className='text-blue-800 dark:text-blue-200'>
+                    <div className='space-y-2'>
+                      <p className='text-sm font-medium'>
+                        🧪 Test XRP Payment Tool
+                      </p>
+                      <p className='text-xs'>
+                        Use this tool to send test XRP payments for testing
+                        purposes:
+                      </p>
+                      <a
+                        href='https://www.openinvoice.store/test-send-xrp.html'
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline'
+                      >
+                        Open Test XRP Payment Sender
+                        <ExternalLink className='h-3 w-3' />
+                      </a>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
             {paymentStatus && (
               <div className='space-y-2'>
                 <div className='flex items-center justify-between text-sm'>
