@@ -107,7 +107,7 @@ export default function TestSolanaPaymentPage() {
 
         // Convert Uint8Array to base64
         const privateKeyBase64 = btoa(
-          String.fromCharCode(...newKeypair.secretKey)
+          String.fromCharCode(...Array.from(newKeypair.secretKey))
         );
         setSenderPrivateKey(privateKeyBase64);
 

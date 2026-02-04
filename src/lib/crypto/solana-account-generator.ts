@@ -22,7 +22,7 @@ export interface SolanaAccount {
   balance?: string; // Initial balance in SOL
 }
 
-const LAMPORTS_PER_SOL = 1_000_000_000n;
+const LAMPORTS_PER_SOL = BigInt(1_000_000_000);
 
 /**
  * Get Solana RPC clients following official pattern
@@ -157,7 +157,10 @@ export async function createSolanaAccount(
 
     return {
       address,
-      privateKey: wallet.privateKey,
+      privateKey:
+        typeof (wallet as any).export === 'function'
+          ? (wallet as any).export().privateKey
+          : undefined,
       balance: balanceSOL.toString()
     };
   } catch (error: any) {
@@ -187,7 +190,10 @@ export async function generateSolanaWallet(): Promise<SolanaAccount> {
   const wallet = await generateKeyPairSigner();
   return {
     address: wallet.address,
-    privateKey: wallet.privateKey,
+    privateKey:
+      typeof (wallet as any).export === 'function'
+        ? (wallet as any).export().privateKey
+        : undefined,
     balance: '0'
   };
 }
