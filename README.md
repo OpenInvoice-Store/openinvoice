@@ -6,6 +6,15 @@ A modern, full-featured invoice management system built with Next.js, TypeScript
   <img src="/public/openstore.png" alt="Open Invoice Dashboard" style="max-width: 100%; border-radius: 8px;" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/usaikoo/openinvoice.git" target="_blank">
+    <img src="https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github" alt="GitHub" />
+  </a>
+  <a href="https://doc.openinvoice.store" target="_blank">
+    <img src="https://img.shields.io/badge/Documentation-Read%20Docs-green?style=for-the-badge&logo=book" alt="Documentation" />
+  </a>
+</p>
+
 ## Overview
 
 Open Invoice is a comprehensive invoice management solution designed for businesses of all sizes. Create, manage, and track invoices effortlessly with an intuitive interface backed by powerful features like customer management, product catalogs, payment tracking, and detailed analytics.
@@ -153,6 +162,7 @@ src/
 
 For detailed setup instructions, see:
 
+- **📚 Full Documentation** - [https://doc.openinvoice.store](https://doc.openinvoice.store) - Complete user guide, developer documentation, and troubleshooting
 - **Clerk Setup** (Authentication, Organizations, Billing & Webhooks) - [docs/clerk_setup.md](./docs/clerk_setup.md)
 - **Stripe Connect Setup** - [docs/stripe_connect_setup.md](./docs/stripe_connect_setup.md)
 - **Payment Reminders Cron Job** - [docs/cron_setup.md](./docs/cron_setup.md)
